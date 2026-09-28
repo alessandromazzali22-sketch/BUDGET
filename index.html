@@ -196,6 +196,11 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* Avvisi e toast */
 .alerts { display: grid; gap: 8px; }
 .alerts:empty { display: none; }
+/* Tasti + e − accanto all'importo: la tastiera numerica di iPhone non li ha */
+.amount-row { display: flex; gap: 8px; align-items: stretch; }
+.amount-row .amount-input { flex: 1; min-width: 0; }
+.calc-keys { display: flex; flex-direction: column; gap: 6px; }
+.calc-key { min-width: 52px; min-height: 44px; flex: 1; font-size: 1.35rem; font-weight: 700; padding: 0; }
 .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; }
 .alert .ic { font-size: 1.05rem; line-height: 1.3; }
 .alert.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn); }
@@ -485,8 +490,8 @@ tr.total td { font-weight: 650; border-bottom: none; }
       </div>
       <div class="field">
         <label for="fAmount">Importo (€)</label>
-        <input type="text" id="fAmount" class="amount-input" inputmode="decimal" enterkeyhint="done" placeholder="0,00" autocomplete="off" required>
-        <div class="hint">Puoi scrivere anche un calcolo: 12,50+8 oppure 30-4,5.</div>
+        <div class="amount-row"><input type="text" id="fAmount" class="amount-input" inputmode="decimal" enterkeyhint="done" placeholder="0,00" autocomplete="off" required><div class="calc-keys"><button type="button" class="calc-key" data-for="fAmount" data-op="+" aria-label="Aggiungi un importo">+</button><button type="button" class="calc-key" data-for="fAmount" data-op="-" aria-label="Sottrai un importo">−</button></div></div>
+        <div class="hint">Per sommare più scontrini usa i tasti + e −: ad esempio 12,50 + 8.</div>
         <div class="err" id="eAmount"></div>
       </div>
       <div class="field">
@@ -537,7 +542,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
   <div class="sheet-card">
     <div class="card-head"><h2 id="depTitle">Versa</h2><button class="icon" id="depClose" aria-label="Chiudi">✕</button></div>
     <form id="depForm" novalidate>
-      <div class="field"><label for="dAmount">Importo (€)</label><input type="text" id="dAmount" class="amount-input" inputmode="decimal" autocomplete="off" placeholder="0,00"><div class="err" id="eDAmount"></div></div>
+      <div class="field"><label for="dAmount">Importo (€)</label><div class="amount-row"><input type="text" id="dAmount" class="amount-input" inputmode="decimal" autocomplete="off" placeholder="0,00"><div class="calc-keys"><button type="button" class="calc-key" data-for="dAmount" data-op="+" aria-label="Aggiungi un importo">+</button><button type="button" class="calc-key" data-for="dAmount" data-op="-" aria-label="Sottrai un importo">−</button></div></div><div class="err" id="eDAmount"></div></div>
       <div class="row">
         <div class="field"><label for="dDate">Data</label><input type="date" id="dDate"><div class="err" id="eDDate"></div></div>
         <div class="field"><label for="dNote">Nota</label><input type="text" id="dNote" maxlength="80" placeholder="Facoltativa" autocomplete="off"></div>
@@ -1790,6 +1795,18 @@ function bindEvents() {
   $("typeInc").addEventListener("click", () => { sheet.kind = "inc"; renderSheet(); });
   $("catGrid").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-ref]"); if (!b) return; sheet.refId = b.dataset.ref; $("eCat").textContent = ""; renderSheet(); });
   $("moveForm").addEventListener("submit", saveMove);
+  document.querySelectorAll(".calc-key").forEach((b) => {
+    const keepFocus = (ev) => ev.preventDefault();          // la tastiera resta aperta
+    b.addEventListener("mousedown", keepFocus);
+    b.addEventListener("touchstart", keepFocus, { passive: false });
+    b.addEventListener("click", () => {
+      const inp = $(b.dataset.for), v = inp.value;
+      const start = inp.selectionStart ?? v.length, end = inp.selectionEnd ?? v.length;
+      if (!v.trim()) return;                                  // nessun operatore all'inizio
+      inp.setRangeText(b.dataset.op, start, end, "end");
+      inp.focus();
+    });
+  });
   $("sheetDelete").addEventListener("click", () => { const id = sheet.editing, kind = state.expenses.some((x) => x.id === id) ? "exp" : "inc"; closeSheet(); deleteMove(id, kind); });
   $("moveBody").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;
