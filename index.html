@@ -715,7 +715,13 @@ function normalizeState(s) {
 const hasUserData = (s) => s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0;
 
 function loadLocal() {
-  try { const raw = localStorage.getItem(LOCAL_KEY); if (raw) { const s = JSON.parse(raw); if (isValidState(s)) return normalizeState(s); } } catch (e) { /* non disponibile */ }
+  let raw = null;
+  try { raw = localStorage.getItem(LOCAL_KEY); } catch (e) { /* non disponibile */ }
+  if (raw) {
+    try { const s = JSON.parse(raw); if (isValidState(s)) return normalizeState(s); } catch (e) { /* illeggibile */ }
+    // Dati presenti ma illeggibili: se ne conserva una copia prima che qualsiasi salvataggio li sovrascriva
+    try { localStorage.setItem(LOCAL_KEY + ".rescue", raw); } catch (e) { /* spazio esaurito */ }
+  }
   return defaultState();
 }
 function saveLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); return true; } catch (e) { return false; } }
@@ -1795,17 +1801,22 @@ function bindEvents() {
   $("typeInc").addEventListener("click", () => { sheet.kind = "inc"; renderSheet(); });
   $("catGrid").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-ref]"); if (!b) return; sheet.refId = b.dataset.ref; $("eCat").textContent = ""; renderSheet(); });
   $("moveForm").addEventListener("submit", saveMove);
+  // Tasti + e −. Su iPhone l'azione parte al tocco (touchstart): bloccarlo tiene aperta la
+  // tastiera ma sopprime il "click", quindi il click resta solo per mouse e trackpad.
   document.querySelectorAll(".calc-key").forEach((b) => {
-    const keepFocus = (ev) => ev.preventDefault();          // la tastiera resta aperta
-    b.addEventListener("mousedown", keepFocus);
-    b.addEventListener("touchstart", keepFocus, { passive: false });
-    b.addEventListener("click", () => {
-      const inp = $(b.dataset.for), v = inp.value;
-      const start = inp.selectionStart ?? v.length, end = inp.selectionEnd ?? v.length;
-      if (!v.trim()) return;                                  // nessun operatore all'inizio
+    let touchedAt = 0;
+    const act = () => {
+      const inp = $(b.dataset.for), v = inp.value, focused = document.activeElement === inp;
+      if (!v.trim()) { inp.focus(); return; }                  // nessun operatore all'inizio
+      const start = focused ? inp.selectionStart ?? v.length : v.length;
+      const end = focused ? inp.selectionEnd ?? v.length : v.length;
       inp.setRangeText(b.dataset.op, start, end, "end");
       inp.focus();
-    });
+      if (!focused) inp.setSelectionRange(inp.value.length, inp.value.length);
+    };
+    b.addEventListener("touchstart", (ev) => { ev.preventDefault(); touchedAt = Date.now(); act(); }, { passive: false });
+    b.addEventListener("mousedown", (ev) => ev.preventDefault());   // mouse: il campo non perde il fuoco
+    b.addEventListener("click", () => { if (Date.now() - touchedAt > 800) act(); });
   });
   $("sheetDelete").addEventListener("click", () => { const id = sheet.editing, kind = state.expenses.some((x) => x.id === id) ? "exp" : "inc"; closeSheet(); deleteMove(id, kind); });
   $("moveBody").addEventListener("click", (ev) => {
@@ -1902,7 +1913,6 @@ function bindEvents() {
 try { const t = localStorage.getItem(TAB_KEY); if (t && $("panel-" + t)) currentTab = t; } catch (e) { /* facoltativo */ }
 applyTheme();
 bindEvents();
-saveLocal();
 if (!cloud.enabled) materializeRecurring();
 render();
 loadChartLib();
