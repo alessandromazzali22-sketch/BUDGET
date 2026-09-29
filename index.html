@@ -492,7 +492,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       </div>
       <div class="filters">
         <input class="search" type="search" id="fSearch" placeholder="Cerca per descrizione, categoria o fonte" aria-label="Cerca" autocomplete="off">
-        <select id="fType" aria-label="Tipo"><option value="all">Tutti</option><option value="exp">Solo spese</option><option value="inc">Solo entrate</option><option value="inv">Solo investimenti</option></select>
+        <select id="fType" aria-label="Tipo"><option value="all">Tutti</option><option value="exp">Solo spese</option><option value="inc">Solo entrate</option><option value="inv">Solo investimenti</option><option value="ref">Solo rimborsi</option></select>
         <select id="fCatFilter" aria-label="Categoria o fonte"></select>
         <select id="fSort" aria-label="Ordina"><option value="date-desc">Più recenti</option><option value="date-asc">Meno recenti</option><option value="amt-desc">Importo più alto</option><option value="amt-asc">Importo più basso</option></select>
       </div>
@@ -606,6 +606,12 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="empty" id="recEmpty" hidden>Nessun movimento ricorrente.</div>
     </section>
 
+    <section class="card" id="reviewCard" hidden>
+      <div class="card-head"><h2>Revisione dati</h2></div>
+      <p class="small muted">Entrate che potrebbero essere rimborsi o saldi iniziali. Decidi una volta per ciascuna: dopo non vengono più proposte.</p>
+      <div id="reviewList"></div>
+    </section>
+
     <section class="card">
       <div class="card-head"><h2>Dati</h2></div>
       <div class="menu-list">
@@ -639,6 +645,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
         <button type="button" id="typeExp" aria-pressed="true">Spesa</button>
         <button type="button" id="typeInc" aria-pressed="false">Entrata</button>
         <button type="button" id="typeInv" aria-pressed="false">Investimento</button>
+        <button type="button" id="typeRef" aria-pressed="false">Rimborso</button>
       </div>
       <div class="quick" id="quickRow" hidden>
         <div class="small muted">Spese frequenti</div>
@@ -657,6 +664,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="field">
         <label id="catGridLabel">Categoria</label><span class="suggest" id="catSuggest" hidden>✨ scelta dalla descrizione</span>
         <div class="cat-grid" id="catGrid" role="group" aria-labelledby="catGridLabel"></div>
+        <div class="hint" id="refHint" hidden>Rimborso: denaro che ti viene restituito per una spesa che hai pagato tu. Riduce la spesa della categoria nel mese in cui lo ricevi e non conta come entrata.</div>
         <div class="hint" id="invHint" hidden>Versamento: soldi che dal conto finiscono negli investimenti (es. acquisto di ETF). Disinvestimento: una vendita che torna sul conto. Non contano nel budget e non cambiano il patrimonio totale. Commissioni e bolli invece sono spese: registrale come spesa.</div>
         <div class="err" id="eCat"></div>
       </div>
@@ -785,11 +793,12 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "3.2.0";
+const APP_VERSION = "4.0.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
-   2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog. */
-const SCHEMA_VERSION = 3;
+   2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
+   4 = sottocategoria in "tag", origine dei record, natura delle fonti, rimborsi (v4.0). */
+const SCHEMA_VERSION = 4;
 /** Se valorizzato, i dati salvati non sono utilizzabili: l'app non scrive nulla finché l'utente non decide. */
 let dataLock = null;
 const THEME_KEY = "budgetMensile.theme";
@@ -891,10 +900,10 @@ const fmtDate = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/$
    un documento per mese "m-AAAA-MM" con spese ed entrate di quel mese. */
 function defaultState() {
   return {
-    version: 2, schemaVersion: SCHEMA_VERSION, migrationLog: [],
+    version: 2, schemaVersion: SCHEMA_VERSION, migrationLog: [], refunds: [], reviewed: [],
     categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: "c" + uid() + i, name, colorIdx: i, icon: iconFor(name, "🏷️") })),
     nextColorIdx: DEFAULT_CATEGORIES.length,
-    incomeSources: DEFAULT_SOURCES.map(([name, family], i) => ({ id: "s" + uid() + i, name, family, icon: iconFor(name, "💶") })),
+    incomeSources: DEFAULT_SOURCES.map(([name, family], i) => ({ id: "s" + uid() + i, name, family, nature: natureFor(name, family), icon: iconFor(name, "💶") })),
     budgets: {}, expenses: [], incomes: [], recurring: [], recurringDone: {}, goals: [], assets: [], assetSnapshots: {}, transfers: [], checkpoints: [], watchCatId: null
   };
 }
@@ -917,6 +926,8 @@ function normalizeState(s) {
   if (!s.assetSnapshots || typeof s.assetSnapshots !== "object") s.assetSnapshots = {};
   if (!Array.isArray(s.transfers)) s.transfers = [];
   if (!Array.isArray(s.checkpoints)) s.checkpoints = [];
+  if (!Array.isArray(s.refunds)) s.refunds = [];
+  if (!Array.isArray(s.reviewed)) s.reviewed = [];
   // v3.1: i controlli nati dalla migrazione non avevano orario e "coprivano" le spese registrate nello stesso giorno
   s.checkpoints.forEach((k) => { if (k.ts == null && /^k\d{4}-\d{2}$/.test(k.id)) k.ts = 1; });
   // v3.0 → v3.1: i valori mensili del patrimonio diventano "saldi reali" datati
@@ -933,11 +944,11 @@ function normalizeState(s) {
   if (s.watchCatId === undefined || (s.watchCatId && !s.categories.some((c) => c.id === s.watchCatId)))
     s.watchCatId = (s.categories.find((c) => c.name.toLowerCase() === "cene e bar") || {}).id || null;
   const dedupe = (arr) => { const seen = new Set(); return arr.filter((x) => !seen.has(x.id) && seen.add(x.id)); };
-  s.expenses = dedupe(s.expenses); s.incomes = dedupe(s.incomes); s.transfers = dedupe(s.transfers || []);
+  s.expenses = dedupe(s.expenses); s.incomes = dedupe(s.incomes); s.transfers = dedupe(s.transfers || []); s.refunds = dedupe(s.refunds);
   delete s.theme;
   return s;
 }
-const hasUserData = (s) => s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0 || (s.assets || []).length > 0 || (s.transfers || []).length > 0 || (s.checkpoints || []).length > 0;
+const hasUserData = (s) => (s.refunds || []).length > 0 || s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0 || (s.assets || []).length > 0 || (s.transfers || []).length > 0 || (s.checkpoints || []).length > 0;
 
 /* --- Pipeline di migrazione (v3.2) ---------------------------------------
    1. si legge il dato; 2. si converte una COPIA in memoria; 3. si valida;
@@ -967,6 +978,35 @@ function validateState(s) {
   return { fatal, warn };
 }
 /** Porta un dato letto (mai modificato) allo schema corrente. Lancia un errore se non è utilizzabile. */
+/** Natura di una fonte: esterna (aiuti), propria ricorrente o propria occasionale. */
+function natureFor(name, family) { return family ? "esterna" : /compenso|stipendio/i.test(name || "") ? "propria_ricorrente" : "propria_occasionale"; }
+/** Schema 3 → 4: solo struttura, nessun importo cambia (lo verifica snapshotOf). */
+function migrate3to4(s) {
+  const TAG_RE = /^([^·]{1,40}?) · (.+)$/;
+  let tagged = 0, imported = 0;
+  for (const arr of [s.expenses, s.incomes]) for (const m of arr) {
+    if (m.tag == null && typeof m.desc === "string") { const x = TAG_RE.exec(m.desc.trim()); if (x) { m.tag = x[1].trim(); m.desc = x[2].trim(); tagged++; } }
+    if (m.ts == null && !m.origin) { m.origin = "imported"; imported++; }
+  }
+  for (const m of s.transfers || []) if (m.ts == null && !m.origin) m.origin = "imported";
+  for (const k of s.checkpoints || []) if (k.ts === 1 && /^k\d{4}-\d{2}$/.test(k.id) && !k.origin) k.origin = "migrated";
+  for (const x of s.incomeSources) if (!x.nature) x.nature = natureFor(x.name, x.family);
+  return { tagged, imported };
+}
+/** Impronta numerica di uno stato: liquidità, investimenti, "Puoi spendere oggi" e totali mensili. */
+function snapshotOf(s) {
+  const saved = state;
+  try {
+    state = s;
+    const t = todayISO(), ym = monthOf(t), l = liquidityAt(t), i = investAt(t), month = {};
+    const add = (k, e, v) => { const key = k + monthOf(e.date); month[key] = (month[key] || 0) + v; };
+    s.expenses.forEach((e) => add("e", e, e.amount)); s.incomes.forEach((e) => add("i", e, e.amount));
+    (s.transfers || []).forEach((e) => add("t", e, e.dir === "out" ? -e.amount : e.amount)); (s.refunds || []).forEach((e) => add("r", e, e.amount));
+    const today = computeToday(computeSummary(ym), ym);
+    return JSON.stringify({ l: l ? l.value : null, i: i ? i.value : null, today: today ? today.perDay : null, n: s.expenses.length + s.incomes.length + (s.transfers || []).length + (s.refunds || []).length,
+      month: Object.keys(month).sort().map((k) => [k, month[k]]) });
+  } finally { state = saved; }
+}
 function runMigrations(raw) {
   const from = typeof raw.schemaVersion === "number" ? raw.schemaVersion : 2;
   if (from > SCHEMA_VERSION) throw new Error(`i dati vengono da una versione più recente dell'app (schema ${from})`);
@@ -974,6 +1014,13 @@ function runMigrations(raw) {
   const before = countRecords(s);
   // schema 2 → 3: le riparazioni già approvate (v3.1, v3.1.1) restano in normalizeState, che è idempotente
   normalizeState(s);
+  let step4 = null;
+  if (from < 4) {
+    const before = snapshotOf(s);
+    step4 = migrate3to4(s);
+    const after = snapshotOf(s);
+    if (before !== after) throw new Error("i valori calcolati cambierebbero con la conversione");
+  }
   const after = countRecords(s);
   const check = validateState(s);
   if (check.fatal.length) throw new Error(check.fatal.join("; "));
@@ -981,7 +1028,7 @@ function runMigrations(raw) {
   if (after.goals !== before.goals || after.recurring !== before.recurring) throw new Error("il numero di obiettivi o ricorrenti è cambiato");
   const log = Array.isArray(s.migrationLog) ? s.migrationLog : [];
   if (from < SCHEMA_VERSION) log.push({ from, to: SCHEMA_VERSION, at: new Date().toISOString(), appVersion: APP_VERSION,
-    duplicatesRemoved: before.moves - after.moves, warnings: check.warn.slice(0, 20) });
+    duplicatesRemoved: before.moves - after.moves, warnings: check.warn.slice(0, 20), ...(step4 ? { tagsExtracted: step4.tagged, importedMarked: step4.imported, numericCheck: "identico" } : {}) });
   s.schemaVersion = SCHEMA_VERSION; s.migrationLog = log;
   return { state: s, from, migrated: from < SCHEMA_VERSION, warnings: check.warn };
 }
@@ -1014,7 +1061,7 @@ function saveLocal() {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); return true; } catch (e) { return false; }
 }
 
-let state = loadLocal();
+let state = defaultState();   // i dati salvati si caricano all'avvio (sezione 12), quando tutte le funzioni di calcolo esistono
 let currentMonth = monthOf(todayISO());
 let currentTab = "mese";
 const charts = { pie: null, trend: null, nw: null };
@@ -1075,6 +1122,7 @@ function project(s) {
   const mv = (kind, e) => { const d = mvDocId(monthOf(e.date)); (out[d] = out[d] || {})[e.id] = JSON.stringify({ ...e, kind }); };
   s.expenses.forEach((e) => mv("exp", e));
   s.incomes.forEach((e) => mv("inc", e));
+  (s.refunds || []).forEach((e) => mv("ref", e));
   (s.transfers || []).forEach((e) => mv("inv", e));
   return out;
 }
@@ -1086,7 +1134,7 @@ function fromEntities(ent) {
     for (const [key, e] of Object.entries(map)) {
       if (!e || e.v == null) continue;
       let v; try { v = JSON.parse(e.v); } catch (err) { continue; }
-      if (doc !== CFG_DOC) { const { kind, ...m } = v; (kind === "inc" ? s.incomes : kind === "inv" ? (s.transfers = s.transfers || []) : s.expenses).push(m); continue; }
+      if (doc !== CFG_DOC) { const { kind, ...m } = v; (kind === "inc" ? s.incomes : kind === "inv" ? (s.transfers = s.transfers || []) : kind === "ref" ? (s.refunds = s.refunds || []) : s.expenses).push(m); continue; }
       const [type, a, b] = key.split("_");
       if (type === "cat") s.categories.push(v);
       else if (type === "src") s.incomeSources.push(v);
@@ -1315,6 +1363,7 @@ function ensureOwnBudget(ym) { if (!state.budgets[ym]) { const b = getBudget(ym)
 const byDateDesc = (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id);
 const expensesOf = (ym) => state.expenses.filter((e) => monthOf(e.date) === ym).sort(byDateDesc);
 const incomesOf = (ym) => state.incomes.filter((e) => monthOf(e.date) === ym).sort(byDateDesc);
+const refundsOf = (ym) => (state.refunds || []).filter((e) => monthOf(e.date) === ym).sort(byDateDesc);
 
 /* --- Movimenti ricorrenti --- */
 const recDate = (r, ym) => `${ym}-${pad(Math.min(r.day, daysInMonth(ym)))}`;
@@ -1358,19 +1407,21 @@ function computeSummary(ym) {
   const b = getBudget(ym), list = expensesOf(ym), incs = incomesOf(ym);
   const spentByCat = {};
   for (const e of list) spentByCat[e.catId] = (spentByCat[e.catId] || 0) + e.amount;
+  const refs = refundsOf(ym), refunded = refs.reduce((s, e) => s + e.amount, 0);
+  for (const e of refs) spentByCat[e.catId] = (spentByCat[e.catId] || 0) - e.amount;   // regola 6: il rimborso riduce la spesa
   const rows = state.categories.map((c) => {
     const budget = b.cats[c.id] || 0, spent = spentByCat[c.id] || 0, pct = budget > 0 ? (spent / budget) * 100 : null;
     return { cat: c, budget, spent, left: budget - spent, pct, level: levelOf(pct) };
   });
   const catBudgetSum = rows.reduce((s, r) => s + r.budget, 0);
   const totalBudget = b.total != null && b.total > 0 ? b.total : catBudgetSum;
-  const totalSpent = list.reduce((s, e) => s + e.amount, 0);
+  const totalSpent = list.reduce((s, e) => s + e.amount, 0) - refunded;
   const totalPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : null;
   const income = incs.reduce((s, e) => s + e.amount, 0);
   const familyIncome = incs.filter((e) => srcById(e.sourceId)?.family).reduce((s, e) => s + e.amount, 0);
   const goalDeposits = state.goals.reduce((s, g) => s + g.deposits.filter((d) => monthOf(d.date) === ym).reduce((a, d) => a + d.amount, 0), 0);
   const invested = state.transfers.filter((t) => monthOf(t.date) === ym).reduce((a, t) => a + (t.dir === "out" ? -t.amount : t.amount), 0);
-  return { budget: b, rows, list, incs, catBudgetSum, totalSpent, income, familyIncome, ownIncome: income - familyIncome, goalDeposits, invested,
+  return { budget: b, rows, list, incs, refunded, catBudgetSum, totalSpent, income, familyIncome, ownIncome: income - familyIncome, goalDeposits, invested,
     total: { budget: totalBudget, spent: totalSpent, left: totalBudget - totalSpent, pct: totalPct, level: levelOf(totalPct), fromCats: !(b.total > 0) } };
 }
 /** "Puoi spendere oggi": residuo del budget meno spese ricorrenti in arrivo, diviso i giorni rimasti (oggi compreso). */
@@ -1471,7 +1522,7 @@ function render() {
   if (currentTab === "movimenti") renderMoves();
   if (currentTab === "obiettivi") { renderNetWorth(); renderGoals(); }
   if (currentTab === "analisi") renderAnalysis();
-  if (currentTab === "impostazioni") renderSettings(sum);
+  if (currentTab === "impostazioni") { renderSettings(sum); renderReview(); }
   $("themeBtn").textContent = "Tema: " + ({ auto: "auto", light: "chiaro", dark: "scuro" }[themePref]);
 }
 
@@ -1572,7 +1623,7 @@ function computeWeek(ym) {
   const [y, m, d] = today.split("-").map(Number), dow = (new Date(y, m - 1, d).getDay() + 6) % 7; // 0 = lunedì
   const dim = daysInMonth(ym), from = Math.max(1, d - dow), to = Math.min(dim, d + (6 - dow));
   const iso = (day) => `${ym}-${pad(day)}`;
-  const exps = expensesOf(ym).filter((e) => e.catId === cat.id);
+  const exps = [...expensesOf(ym).filter((e) => e.catId === cat.id), ...refundsOf(ym).filter((e) => e.catId === cat.id).map((e) => ({ ...e, amount: -e.amount }))];
   const before = exps.filter((e) => e.date < iso(from)).reduce((a, e) => a + e.amount, 0);
   const spent = exps.filter((e) => e.date >= iso(from) && e.date <= iso(to)).reduce((a, e) => a + e.amount, 0);
   const quota = Math.max(0, Math.round((budget - before) * (to - from + 1) / (dim - from + 1)));
@@ -1649,7 +1700,7 @@ function showDay(iso) {
 /* --- Scheda Movimenti: ricerca, filtri e ordinamento --- */
 const transfersOf = (ym) => state.transfers.filter((e) => monthOf(e.date) === ym).sort(byDateDesc);
 const trType = (dir) => TRANSFER_TYPES.find((x) => x.id === dir) || TRANSFER_TYPES[0];
-function allMovesOf(ym) { return [...expensesOf(ym).map((e) => ({ ...e, kind: "exp" })), ...incomesOf(ym).map((e) => ({ ...e, kind: "inc" })), ...transfersOf(ym).map((e) => ({ ...e, kind: "inv" }))]; }
+function allMovesOf(ym) { return [...expensesOf(ym).map((e) => ({ ...e, kind: "exp" })), ...incomesOf(ym).map((e) => ({ ...e, kind: "inc" })), ...transfersOf(ym).map((e) => ({ ...e, kind: "inv" })), ...refundsOf(ym).map((e) => ({ ...e, kind: "ref" }))]; }
 function renderMoves() {
   const sel = $("fCatFilter"), keep = sel.value || "all";
   sel.innerHTML = `<option value="all">Tutte le voci</option>` +
@@ -1659,23 +1710,24 @@ function renderMoves() {
   const q = $("fSearch").value.trim().toLowerCase(), type = $("fType").value, cf = sel.value, sort = $("fSort").value;
   const list = allMovesOf(currentMonth).filter((m) => {
     if (type !== "all" && m.kind !== type) return false;
-    if (cf !== "all") { const [k, id] = cf.split(":"); if (k === "c" && (m.kind !== "exp" || m.catId !== id)) return false; if (k === "s" && (m.kind !== "inc" || m.sourceId !== id)) return false; }
-    if (q) { const label = m.kind === "exp" ? catById(m.catId)?.name : m.kind === "inv" ? trType(m.dir).name + " investimento" : srcById(m.sourceId)?.name; if (!`${m.desc || ""} ${label || ""}`.toLowerCase().includes(q)) return false; }
+    if (cf !== "all") { const [k, id] = cf.split(":"); if (k === "c" && ((m.kind !== "exp" && m.kind !== "ref") || m.catId !== id)) return false; if (k === "s" && (m.kind !== "inc" || m.sourceId !== id)) return false; }
+    if (q) { const label = m.kind === "exp" || m.kind === "ref" ? catById(m.catId)?.name : m.kind === "inv" ? trType(m.dir).name + " investimento" : srcById(m.sourceId)?.name; if (!`${m.tag || ""} ${m.desc || ""} ${label || ""}`.toLowerCase().includes(q)) return false; }
     return true;
   });
   const cmp = { "date-desc": byDateDesc, "date-asc": (a, b) => -byDateDesc(a, b), "amt-desc": (a, b) => b.amount - a.amount, "amt-asc": (a, b) => a.amount - b.amount }[sort];
   list.sort(cmp);
   const exp = list.filter((m) => m.kind === "exp").reduce((s, m) => s + m.amount, 0), inc = list.filter((m) => m.kind === "inc").reduce((s, m) => s + m.amount, 0);
   const inv = list.filter((m) => m.kind === "inv").reduce((s, m) => s + (m.dir === "out" ? -m.amount : m.amount), 0);
-  $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)} · entrate ${fmtEur(inc)}${list.some((m) => m.kind === "inv") ? " · investito " + fmtSigned(inv) : ""}`;
+  const refd = list.filter((m) => m.kind === "ref").reduce((s, m) => s + m.amount, 0);
+  $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)}${refd ? " · rimborsi " + fmtEur(refd) : ""} · entrate ${fmtEur(inc)}${list.some((m) => m.kind === "inv") ? " · investito " + fmtSigned(inv) : ""}`;
   $("moveEmpty").hidden = list.length > 0;
   $("moveBody").innerHTML = list.map((m) => {
-    const isExp = m.kind === "exp", isInv = m.kind === "inv", ref = isExp ? catById(m.catId) : isInv ? trType(m.dir) : srcById(m.sourceId);
+    const isRef = m.kind === "ref", isExp = m.kind === "exp", isInv = m.kind === "inv", ref = isExp || isRef ? catById(m.catId) : isInv ? trType(m.dir) : srcById(m.sourceId);
     const dot = isExp ? (ref ? colorOf(ref) : OTHER_COLOR) : isInv ? "var(--muted)" : "var(--income)";
     return `<tr data-id="${m.id}" data-kind="${m.kind}">
       <td class="num">${fmtDate(m.date)}</td>
-      <td><span class="dot" style="background:${dot}"></span><span class="emo">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span> ${escapeHtml(ref ? ref.name : "(eliminata)")}${isExp ? "" : isInv ? ' <span class="badge">investimento</span>' : ' <span class="badge in">entrata</span>'}</td>
-      <td>${escapeHtml(m.desc || "")}${m.recId ? ' <span class="badge">ricorrente</span>' : ""}${m.demo ? ' <span class="badge">demo</span>' : ""}</td>
+      <td><span class="dot" style="background:${dot}"></span><span class="emo">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span> ${escapeHtml(ref ? ref.name : "(eliminata)")}${isExp ? "" : isRef ? ' <span class="badge in">rimborso</span>' : isInv ? ' <span class="badge">investimento</span>' : ' <span class="badge in">entrata</span>'}</td>
+      <td>${m.tag ? `<span class="badge">${escapeHtml(m.tag)}</span> ` : ""}${escapeHtml(m.desc || "")}${m.recId ? ' <span class="badge">ricorrente</span>' : ""}${m.demo ? ' <span class="badge">demo</span>' : ""}</td>
       <td class="r num"><strong class="${isExp || isInv ? "" : "pos"}">${isInv ? "⇄ " : isExp ? "−" : "+"}${fmtEur(m.amount)}</strong></td>
       <td class="r actions"><button class="link" data-act="edit">Modifica</button><button class="link danger" data-act="del">Elimina</button></td>
     </tr>`;
@@ -1728,7 +1780,7 @@ function cpLatest(group, atDate, excludeDate = null) {
 /** Movimenti successivi al controllo (data > from, oppure stesso giorno ma registrati dopo il controllo) e fino a "to". */
 function flowsBetween(from, to, fromTs = null) {
   const inR = (e) => e.date <= to && (e.date > from || (e.date === from && fromTs && e.ts && e.ts > fromTs)), tot = (arr) => arr.reduce((a, e) => a + e.amount, 0);
-  const inc = tot(state.incomes.filter(inR)), exp = tot(state.expenses.filter(inR));
+  const inc = tot(state.incomes.filter(inR)) + tot((state.refunds || []).filter(inR)), exp = tot(state.expenses.filter(inR));
   const tin = tot(state.transfers.filter((e) => inR(e) && e.dir !== "out")), tout = tot(state.transfers.filter((e) => inR(e) && e.dir === "out"));
   return { inc, exp, tin, tout, liquid: inc - exp - tin + tout, invest: tin - tout };
 }
@@ -1950,7 +2002,7 @@ function renderAnalysis() {
   renderTrend(rows);
   const prev = shiftMonth(currentMonth, -1), prev3 = [1, 2, 3].map((i) => shiftMonth(currentMonth, -i));
   $("cmpLabel").textContent = `${monthLabel(currentMonth)} rispetto ai mesi precedenti`;
-  const spentIn = (ym, catId) => expensesOf(ym).filter((e) => e.catId === catId).reduce((s, e) => s + e.amount, 0);
+  const spentIn = (ym, catId) => expensesOf(ym).filter((e) => e.catId === catId).reduce((s, e) => s + e.amount, 0) - refundsOf(ym).filter((e) => e.catId === catId).reduce((s, e) => s + e.amount, 0);
   const lines = state.categories.map((c) => {
     const now = spentIn(currentMonth, c.id), p = spentIn(prev, c.id), avg = Math.round(prev3.reduce((s, ym) => s + spentIn(ym, c.id), 0) / 3);
     return { c, now, p, avg, diff: now - avg };
@@ -2073,7 +2125,7 @@ function resetCharts() { Object.keys(charts).forEach((k) => { if (charts[k]) { c
 const sheet = { kind: "exp", editing: null, refId: null };
 function openSheet(kind = "exp", item = null) {
   sheet.kind = item ? item.kind : kind; sheet.editing = item ? item.id : null;
-  sheet.refId = item ? (item.kind === "exp" ? item.catId : item.kind === "inv" ? item.dir : item.sourceId) : null;
+  sheet.refId = item ? (item.kind === "exp" || item.kind === "ref" ? item.catId : item.kind === "inv" ? item.dir : item.sourceId) : null;
   sheet.manual = !!item; sheet.auto = false;
   $("fAmount").value = item ? centsToInput(item.amount) : "";
   $("fDate").value = item ? item.date : (monthOf(todayISO()) === currentMonth ? todayISO() : `${currentMonth}-01`);
@@ -2091,18 +2143,19 @@ function focusLater(id) {
 }
 function closeSheet() { $("moveSheet").hidden = true; sheet.editing = null; }
 function renderSheet() {
-  const isExp = sheet.kind === "exp", isInv = sheet.kind === "inv";
-  $("typeExp").setAttribute("aria-pressed", String(isExp)); $("typeInc").setAttribute("aria-pressed", String(sheet.kind === "inc")); $("typeInv").setAttribute("aria-pressed", String(isInv));
-  const noun = isExp ? "spesa" : isInv ? "investimento" : "entrata";
-  $("sheetTitle").textContent = (sheet.editing ? "Modifica " : isInv ? "Nuovo " : "Nuova ") + noun;
+  const isRef = sheet.kind === "ref", isExp = sheet.kind === "exp", isInv = sheet.kind === "inv", isCat = isExp || isRef;
+  $("typeExp").setAttribute("aria-pressed", String(isExp)); $("typeInc").setAttribute("aria-pressed", String(sheet.kind === "inc")); $("typeInv").setAttribute("aria-pressed", String(isInv)); $("typeRef").setAttribute("aria-pressed", String(isRef));
+  const noun = isExp ? "spesa" : isRef ? "rimborso" : isInv ? "investimento" : "entrata";
+  $("sheetTitle").textContent = (sheet.editing ? "Modifica " : isInv || isRef ? "Nuovo " : "Nuova ") + noun;
   $("submitBtn").textContent = sheet.editing ? "Salva modifiche" : "Aggiungi " + noun;
-  $("catGridLabel").textContent = isExp ? "Categoria" : isInv ? "Tipo" : "Fonte";
-  const items = isExp ? state.categories : isInv ? TRANSFER_TYPES : state.incomeSources;
+  $("catGridLabel").textContent = isExp ? "Categoria" : isRef ? "Categoria della spesa rimborsata" : isInv ? "Tipo" : "Fonte";
+  const items = isCat ? state.categories : isInv ? TRANSFER_TYPES : state.incomeSources;
   if (!items.some((x) => x.id === sheet.refId)) sheet.refId = null;
   $("catGrid").innerHTML = items.map((x) => `<button type="button" data-ref="${x.id}" aria-pressed="${x.id === sheet.refId}">
       <span class="emo" aria-hidden="true">${escapeHtml(x.icon || "")}</span>${escapeHtml(x.name)}</button>`).join("");
   $("catSuggest").hidden = !(sheet.auto && sheet.refId);
   $("invHint").hidden = !isInv;
+  $("refHint").hidden = !isRef;
 }
 
 /* --- Inserimento lampo ---
@@ -2162,12 +2215,12 @@ function renderQuick() {
 }
 function saveMove(ev) {
   ev.preventDefault();
-  const date = $("fDate").value, amount = parseAmount($("fAmount").value), refId = sheet.refId, isExp = sheet.kind === "exp", isInv = sheet.kind === "inv";
+  const date = $("fDate").value, amount = parseAmount($("fAmount").value), refId = sheet.refId, isExp = sheet.kind === "exp", isInv = sheet.kind === "inv", isCat = isExp || sheet.kind === "ref";
   const errs = {};
   if (!isValidISODate(date)) errs.eDate = "Inserisci una data valida.";
   if (amount == null) errs.eAmount = "Inserisci un importo numerico (es. 12,50).";
   else if (amount <= 0) errs.eAmount = "L'importo deve essere maggiore di zero.";
-  if (!refId || !(isExp ? catById(refId) : isInv ? TRANSFER_TYPES.some((x) => x.id === refId) : srcById(refId))) errs.eCat = isExp ? "Seleziona una categoria." : isInv ? "Scegli versamento o disinvestimento." : "Seleziona una fonte.";
+  if (!refId || !(isCat ? catById(refId) : isInv ? TRANSFER_TYPES.some((x) => x.id === refId) : srcById(refId))) errs.eCat = isCat ? "Seleziona una categoria." : isInv ? "Scegli versamento o disinvestimento." : "Seleziona una fonte.";
   $("eDate").textContent = errs.eDate || ""; $("eAmount").textContent = errs.eAmount || ""; $("eCat").textContent = errs.eCat || "";
   if (errs.eDate) $("fDate").setAttribute("aria-invalid", "true"); else $("fDate").removeAttribute("aria-invalid");
   if (errs.eAmount) $("fAmount").setAttribute("aria-invalid", "true"); else $("fAmount").removeAttribute("aria-invalid");
@@ -2176,7 +2229,7 @@ function saveMove(ev) {
   const before = computeAlerts(computeSummary(ym));
   const v = { date, amount, desc: $("fDesc").value.trim() };
   const list = listOfKind(sheet.kind);
-  const refField = isExp ? { catId: refId } : isInv ? { dir: refId } : { sourceId: refId };
+  const refField = isCat ? { catId: refId } : isInv ? { dir: refId } : { sourceId: refId };
   if (sheet.editing) {
     // la modifica può anche cambiare tipo (spesa, entrata, investimento)
     const oldList = listOfKind(kindOfId(sheet.editing));
@@ -2189,6 +2242,8 @@ function saveMove(ev) {
     // v3.1.2: l'istante di registrazione non cambia con la modifica, altrimenti un movimento
     // dello stesso giorno di un controllo saldi uscirebbe dal calcolo della liquidità
     if (old.ts != null) upd.ts = old.ts;
+    // v4: anche sottocategoria e origine del record restano quelle originali
+    for (const k of ["tag", "origin", "fromIncome"]) if (old[k] != null) upd[k] = old[k];
     list.push(upd);
     toast("info", "Movimento aggiornato.", 2500);
   } else {
@@ -2207,8 +2262,8 @@ function saveMove(ev) {
   render();
 }
 /** Elimina subito e offre "Annulla" per qualche secondo. */
-const listOfKind = (k) => (k === "exp" ? state.expenses : k === "inv" ? state.transfers : state.incomes);
-const kindOfId = (id) => (state.expenses.some((x) => x.id === id) ? "exp" : state.transfers.some((x) => x.id === id) ? "inv" : "inc");
+const listOfKind = (k) => (k === "exp" ? state.expenses : k === "inv" ? state.transfers : k === "ref" ? state.refunds : state.incomes);
+const kindOfId = (id) => (state.expenses.some((x) => x.id === id) ? "exp" : state.transfers.some((x) => x.id === id) ? "inv" : state.refunds.some((x) => x.id === id) ? "ref" : "inc");
 function deleteMove(id, kind) {
   const list = listOfKind(kind);
   const idx = list.findIndex((x) => x.id === id); if (idx < 0) return;
@@ -2258,6 +2313,7 @@ async function deleteCategory(catId) {
   const target = state.categories.find((x) => x.name.toLowerCase() === "altro" && x.id !== catId) || state.categories.find((x) => x.id !== catId);
   if (!(await askConfirm(affected.length ? `Eliminare "${c.name}"? Le sue ${affected.length} spese (in tutti i mesi) e i ricorrenti collegati passano in "${target.name}".` : `Eliminare la categoria "${c.name}"?`, "Elimina"))) return;
   affected.forEach((e) => { e.catId = target.id; });
+  state.refunds.forEach((e) => { if (e.catId === catId) e.catId = target.id; });
   state.recurring.forEach((r) => { if (r.type === "exp" && r.refId === catId) r.refId = target.id; });
   Object.values(state.budgets).forEach((b) => { delete b.cats[catId]; });
   state.categories = state.categories.filter((x) => x.id !== catId);
@@ -2268,7 +2324,7 @@ function addSource(name) {
   if (!name) { $("eNewSrc").textContent = "Inserisci un nome."; return; }
   if (nameTaken(state.incomeSources, name)) { $("eNewSrc").textContent = "Esiste già una fonte con questo nome."; return; }
   $("eNewSrc").textContent = "";
-  state.incomeSources.push({ id: "s" + uid(), name, family: false, icon: iconFor(name, "💶") });
+  state.incomeSources.push({ id: "s" + uid(), name, family: false, nature: natureFor(name, false), icon: iconFor(name, "💶") });
   $("newSrc").value = ""; persist(); render();
 }
 async function deleteSource(id) {
@@ -2421,6 +2477,7 @@ function exportCsv() {
   const q = (s) => `"${String(s).replace(/"/g, '""')}"`, num = (c) => (c / 100).toFixed(2).replace(".", ",");
   const lines = ["Data;Tipo;Categoria o fonte;Descrizione;Importo (EUR)"];
   for (const m of list) {
+    if (m.kind === "ref") { lines.push([fmtDate(m.date), "Rimborso", q(catById(m.catId)?.name || ""), q([m.tag, m.desc].filter(Boolean).join(" · ")), num(m.amount)].join(";")); continue; }
     if (m.kind === "inv") { lines.push([fmtDate(m.date), "Investimento", q(trType(m.dir).name), q(m.desc || ""), num(m.dir === "out" ? m.amount : -m.amount)].join(";")); continue; }
     lines.push([fmtDate(m.date), m.kind === "exp" ? "Spesa" : "Entrata", q((m.kind === "exp" ? catById(m.catId) : srcById(m.sourceId))?.name || ""), q(m.desc || ""), num(m.kind === "exp" ? -m.amount : m.amount)].join(";"));
   }
@@ -2430,6 +2487,48 @@ function exportCsv() {
   if (list.some((m) => m.kind === "inv")) lines.push(["", "", "", q("Investito netto (non è una spesa)"), num(-invNet)].join(";"));
   offerFile(`movimenti_${currentMonth}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
 }
+/* --- Revisione dati (v4): entrate da riclassificare, una decisione per voce, tutto nel registro --- */
+const REVIEW_RE = /rimbors|\breso\b|satispay|saldo/i;
+function reviewCandidates() {
+  const done = new Set(state.reviewed || []);
+  return state.incomes.filter((e) => !done.has(e.id) && !/calcio/i.test(srcById(e.sourceId)?.name || "")
+    && REVIEW_RE.test(`${e.tag || ""} ${e.desc || ""} ${srcById(e.sourceId)?.name || ""}`)).sort((a, b) => a.date.localeCompare(b.date));
+}
+function renderReview() {
+  const list = dataLock ? [] : reviewCandidates();
+  $("reviewCard").hidden = !list.length; if (!list.length) { $("reviewList").innerHTML = ""; return; }
+  const opts = state.categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  $("reviewList").innerHTML = list.map((e) => `<div class="review-item" data-id="${e.id}" style="padding:10px 0;border-top:1px solid var(--border)">
+      <div><strong class="num">${fmtEur(e.amount)}</strong> · ${fmtDate(e.date)} · ${escapeHtml(srcById(e.sourceId)?.name || "")}</div>
+      <div class="small muted">${escapeHtml([e.tag, e.desc].filter(Boolean).join(" · ") || "(senza descrizione)")}</div>
+      <div class="btn-row" style="margin-top:6px;flex-wrap:wrap">
+        <select data-rv="cat" aria-label="Categoria della spesa rimborsata">${opts}</select>
+        <button type="button" data-rv="ref">È un rimborso</button><button type="button" data-rv="init">Saldo iniziale</button><button type="button" data-rv="keep">Resta entrata</button>
+      </div></div>`).join("");
+}
+async function reviewAction(id, act, catId) {
+  const e = state.incomes.find((x) => x.id === id); if (!e) return;
+  if (act === "ref") {
+    const c = catById(catId); if (!c) return;
+    if (!(await askConfirm(`Trasformare ${fmtEur(e.amount)} del ${fmtDate(e.date)} in rimborso di "${c.name}"? La liquidità non cambia; la spesa di ${monthLabel(monthOf(e.date)).toLowerCase()} in quella categoria scende di ${fmtEur(e.amount)}.`, "Conferma"))) return;
+    state.incomes = state.incomes.filter((x) => x.id !== id);
+    const r = { id: e.id, date: e.date, amount: e.amount, catId, desc: e.desc || "", fromIncome: true };
+    for (const k of ["tag", "ts", "origin"]) if (e[k] != null) r[k] = e[k];
+    state.refunds.push(r);
+  } else if (act === "init") {
+    const t = todayISO(), before = liquidityAt(t);
+    state.incomes = state.incomes.filter((x) => x.id !== id);
+    const after = liquidityAt(t); state.incomes.push(e);
+    const delta = before && after ? after.value - before.value : 0;
+    if (!(await askConfirm(`Togliere ${fmtEur(e.amount)} del ${fmtDate(e.date)} dalle entrate perché è un saldo iniziale? ${delta === 0 ? "La liquidità di oggi non cambia." : `La liquidità di oggi cambia di ${fmtSigned(delta)}.`}`, "Togli"))) return;
+    state.incomes = state.incomes.filter((x) => x.id !== id);
+  }
+  state.reviewed = [...(state.reviewed || []), id];
+  (state.migrationLog = state.migrationLog || []).push({ review: act, id, date: e.date, amount: e.amount, ...(act === "ref" ? { catId } : {}), at: new Date().toISOString(), appVersion: APP_VERSION });
+  persist([monthOf(e.date)]); render();
+  toast("info", act === "keep" ? "Resta un'entrata." : act === "ref" ? "Registrato come rimborso." : "Tolto dalle entrate.", 2500);
+}
+
 /* --- Backup cifrato (v3.2): PBKDF2-SHA-256 + AES-GCM 256 del Web Crypto API, nessuna libreria esterna.
    La frase segreta non viene mai salvata: se si perde, il backup non si può aprire. --- */
 const BACKUP_FORMAT = "budget-backup", BACKUP_FORMAT_VERSION = 1, KDF_ITERATIONS = 600000, PASS_MIN = 10;
@@ -2533,7 +2632,7 @@ function renderNotices() {
   $("backupNag").hidden = !show;
   if (show) $("backupNagText").innerHTML = `<strong>${days == null ? "Nessun backup salvato." : `Ultimo backup ${days} giorni fa.`}</strong> I dati sono solo su questo dispositivo: se lo perdi o lo ripristini, senza backup non si recuperano.`;
 }
-const allMonths = (s) => [...new Set([...s.expenses, ...s.incomes].map((e) => monthOf(e.date)))];
+const allMonths = (s) => [...new Set([...s.expenses, ...s.incomes, ...(s.refunds || [])].map((e) => monthOf(e.date)))];
 async function importJson(file) {
   let r;
   try { r = await readBackupFile(file); if (!r) return; } catch (e) { toast("over", `Backup non utilizzabile: ${escapeHtml(e.message)}.`); return; }
@@ -2619,6 +2718,7 @@ function bindEvents() {
   $("typeExp").addEventListener("click", () => { sheet.kind = "exp"; sheet.auto = false; renderSheet(); renderQuick(); });
   $("typeInc").addEventListener("click", () => { sheet.kind = "inc"; sheet.auto = false; renderSheet(); renderQuick(); });
   $("typeInv").addEventListener("click", () => { sheet.kind = "inv"; sheet.auto = false; renderSheet(); renderQuick(); });
+  $("typeRef").addEventListener("click", () => { sheet.kind = "ref"; sheet.auto = false; renderSheet(); renderQuick(); });
   $("catGrid").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-ref]"); if (!b) return; sheet.refId = b.dataset.ref; sheet.manual = true; sheet.auto = false; $("eCat").textContent = ""; renderSheet(); });
   $("fDesc").addEventListener("input", () => {
     if (sheet.kind !== "exp" || sheet.manual) return;
@@ -2740,6 +2840,10 @@ function bindEvents() {
   $("welcomeSkip").addEventListener("click", () => { try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* facoltativo */ } renderNotices(); });
   $("importJson").addEventListener("click", () => { importMode = "restore"; $("importFile").click(); });
   let importMode = "restore";
+  $("reviewList").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-rv]"); if (!b) return;
+    const item = b.closest(".review-item"); reviewAction(item.dataset.id, b.dataset.rv, item.querySelector('select[data-rv="cat"]').value);
+  });
   $("verifyBackup").addEventListener("click", () => { importMode = "verify"; $("importFile").click(); });
   $("importFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; ev.target.value = ""; const m = importMode; importMode = "restore"; if (f) (m === "verify" ? verifyBackup : importJson)(f); });
   $("lockSave").addEventListener("click", () => { if (dataLock) offerFile(`budget-dati-originali-${todayISO()}.json`, dataLock.raw, "application/json"); });
@@ -2778,6 +2882,7 @@ function bindEvents() {
 /* ==========================================================================
    12. AVVIO
    ========================================================================== */
+state = loadLocal();
 try { const t = localStorage.getItem(TAB_KEY); if (t && $("panel-" + t)) currentTab = t; } catch (e) { /* facoltativo */ }
 applyTheme();
 bindEvents();
