@@ -395,9 +395,14 @@ tr.total td { font-weight: 650; border-bottom: none; }
     <div>Salvataggio non disponibile in questa finestra: i dati andranno persi alla chiusura. Usa "Scarica backup" in Impostazioni.</div>
   </div>
 
+  <div id="dataLock" class="alert over" role="alert" hidden style="margin-bottom:12px">
+    <span class="ic" aria-hidden="true">🔒</span>
+    <div><strong>Dati in sola lettura.</strong> <span id="dataLockText"></span>
+      <div class="btn-row" style="margin-top:8px"><button class="primary" id="lockSave">Salva i dati originali</button><button id="lockReset">Ricomincia da zero…</button></div></div>
+  </div>
   <div id="welcome" class="alert info" role="region" aria-label="Benvenuto" hidden style="margin-bottom:12px">
     <span class="ic" aria-hidden="true">👋</span>
-    <div><strong>Benvenuto.</strong> Hai un file di backup (budget_backup_….json)? Importalo ora per ritrovare tutti i tuoi dati.
+    <div><strong>Benvenuto.</strong> Hai un file di backup (budget-backup-….json)? Importalo ora per ritrovare tutti i tuoi dati.
       <div class="btn-row" style="margin-top:8px"><button class="primary" id="welcomeImport">Importa backup</button><button id="welcomeSkip">Inizia da zero</button></div></div>
   </div>
   <div id="backupNag" class="alert warn" role="status" hidden style="margin-bottom:12px">
@@ -605,7 +610,8 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="card-head"><h2>Dati</h2></div>
       <div class="menu-list">
         <button id="exportCsv2">Esporta CSV dei movimenti del mese</button>
-        <button id="exportJson">Salva backup completo (JSON)</button>
+        <button id="exportJson">Salva backup cifrato</button>
+        <button id="verifyBackup">Verifica un backup (senza toccare i dati)</button>
         <button id="importJson">Ripristina da backup…</button>
         <button id="loadDemo">Carica dati demo nel mese</button>
         <button id="removeDemo">Rimuovi dati demo</button>
@@ -760,14 +766,32 @@ tr.total td { font-weight: 650; border-bottom: none; }
   </div>
 </div>
 
+<div class="modal" id="passModal" hidden role="dialog" aria-modal="true" aria-labelledby="passTitle">
+  <div class="modal-card">
+    <p id="passTitle" style="margin-bottom:6px;font-weight:650"></p>
+    <p class="small muted" id="passHint" style="margin-bottom:12px"></p>
+    <label class="small" for="passInput">Frase segreta</label>
+    <input type="password" id="passInput" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+    <div id="passConfirmWrap" style="margin-top:8px"><label class="small" for="passInput2">Ripeti la frase segreta</label>
+      <input type="password" id="passInput2" autocomplete="new-password" autocapitalize="off" spellcheck="false"></div>
+    <div class="err" id="passErr" role="alert"></div>
+    <div class="btn-row" style="margin-top:8px"><button type="button" id="passCancel">Annulla</button><button type="button" id="passOk" class="primary">Continua</button></div>
+  </div>
+</div>
+
 <script>window.CHART_LOCAL = "./chart.umd.js";</script>
 <script>
 "use strict";
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "3.1.2";
+const APP_VERSION = "3.2.0";
 const LOCAL_KEY = "budgetMensile.v1";
+/* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
+   2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog. */
+const SCHEMA_VERSION = 3;
+/** Se valorizzato, i dati salvati non sono utilizzabili: l'app non scrive nulla finché l'utente non decide. */
+let dataLock = null;
 const THEME_KEY = "budgetMensile.theme";
 const TAB_KEY = "budgetMensile.tab";
 const DEFAULT_CATEGORIES = ["Casa", "Alimentari", "Trasporti", "Salute", "Svago", "Abbonamenti", "Altro"];
@@ -867,7 +891,7 @@ const fmtDate = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/$
    un documento per mese "m-AAAA-MM" con spese ed entrate di quel mese. */
 function defaultState() {
   return {
-    version: 2,
+    version: 2, schemaVersion: SCHEMA_VERSION, migrationLog: [],
     categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: "c" + uid() + i, name, colorIdx: i, icon: iconFor(name, "🏷️") })),
     nextColorIdx: DEFAULT_CATEGORIES.length,
     incomeSources: DEFAULT_SOURCES.map(([name, family], i) => ({ id: "s" + uid() + i, name, family, icon: iconFor(name, "💶") })),
@@ -915,17 +939,80 @@ function normalizeState(s) {
 }
 const hasUserData = (s) => s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0 || (s.assets || []).length > 0 || (s.transfers || []).length > 0 || (s.checkpoints || []).length > 0;
 
+/* --- Pipeline di migrazione (v3.2) ---------------------------------------
+   1. si legge il dato; 2. si converte una COPIA in memoria; 3. si valida;
+   4. solo se la validazione passa: copia di sicurezza dei dati originali, poi scrittura e registro;
+   5. se fallisce: nessuna scrittura, dati in sola lettura e copia di emergenza. */
+function countRecords(s) {
+  const n = (a) => (Array.isArray(a) ? a.length : 0);
+  return { moves: n(s.expenses) + n(s.incomes) + n(s.transfers), checkpoints: n(s.checkpoints), goals: n(s.goals), recurring: n(s.recurring) };
+}
+/** Controlli di struttura. "fatal" blocca la migrazione; "warn" finisce solo nel registro. */
+function validateState(s) {
+  const fatal = [], warn = [];
+  if (!isValidState(s)) fatal.push("struttura dei dati non valida");
+  const isoOk = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const ids = new Set();
+  for (const [name, arr] of [["spese", s.expenses], ["entrate", s.incomes], ["investimenti", s.transfers]]) {
+    if (!Array.isArray(arr)) { fatal.push(`${name}: elenco mancante`); continue; }
+    for (const m of arr) {
+      if (!m || typeof m !== "object" || !m.id) { fatal.push(`${name}: movimento senza identificativo`); break; }
+      if (ids.has(m.id)) warn.push(`identificativo ripetuto ${m.id}`); ids.add(m.id);
+      if (!isoOk(m.date)) warn.push(`${name}: data non valida (${m.id})`);
+      if (typeof m.amount !== "number" || !isFinite(m.amount)) warn.push(`${name}: importo non numerico (${m.id})`);
+      else if (!Number.isInteger(m.amount) || m.amount <= 0) warn.push(`${name}: importo anomalo (${m.id})`);
+    }
+  }
+  for (const k of s.checkpoints || []) if (!isoOk(k.date)) warn.push(`controllo dei saldi con data non valida (${k.id})`);
+  return { fatal, warn };
+}
+/** Porta un dato letto (mai modificato) allo schema corrente. Lancia un errore se non è utilizzabile. */
+function runMigrations(raw) {
+  const from = typeof raw.schemaVersion === "number" ? raw.schemaVersion : 2;
+  if (from > SCHEMA_VERSION) throw new Error(`i dati vengono da una versione più recente dell'app (schema ${from})`);
+  const s = JSON.parse(JSON.stringify(raw));
+  const before = countRecords(s);
+  // schema 2 → 3: le riparazioni già approvate (v3.1, v3.1.1) restano in normalizeState, che è idempotente
+  normalizeState(s);
+  const after = countRecords(s);
+  const check = validateState(s);
+  if (check.fatal.length) throw new Error(check.fatal.join("; "));
+  if (after.checkpoints !== before.checkpoints && before.checkpoints > 0) throw new Error("il numero dei controlli dei saldi è cambiato");
+  if (after.goals !== before.goals || after.recurring !== before.recurring) throw new Error("il numero di obiettivi o ricorrenti è cambiato");
+  const log = Array.isArray(s.migrationLog) ? s.migrationLog : [];
+  if (from < SCHEMA_VERSION) log.push({ from, to: SCHEMA_VERSION, at: new Date().toISOString(), appVersion: APP_VERSION,
+    duplicatesRemoved: before.moves - after.moves, warnings: check.warn.slice(0, 20) });
+  s.schemaVersion = SCHEMA_VERSION; s.migrationLog = log;
+  return { state: s, from, migrated: from < SCHEMA_VERSION, warnings: check.warn };
+}
+function lockData(reason, raw) {
+  try { localStorage.setItem(LOCAL_KEY + ".rescue", raw); } catch (e) { /* spazio esaurito: resta la chiave originale, mai sovrascritta */ }
+  dataLock = { reason, raw };
+}
 function loadLocal() {
   let raw = null;
   try { raw = localStorage.getItem(LOCAL_KEY); } catch (e) { /* non disponibile */ }
-  if (raw) {
-    try { const s = JSON.parse(raw); if (isValidState(s)) return normalizeState(s); } catch (e) { /* illeggibile */ }
-    // Dati presenti ma illeggibili: se ne conserva una copia prima che qualsiasi salvataggio li sovrascriva
-    try { localStorage.setItem(LOCAL_KEY + ".rescue", raw); } catch (e) { /* spazio esaurito */ }
+  if (!raw) return defaultState();
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e) { /* illeggibile */ }
+  if (!parsed || !isValidState(parsed)) { lockData("i dati salvati non sono leggibili", raw); return defaultState(); }
+  try {
+    const r = runMigrations(parsed);
+    if (r.migrated) {
+      // copia di sicurezza dei dati originali PRIMA di scrivere quelli convertiti
+      try { localStorage.setItem(`${LOCAL_KEY}.pre-schema${SCHEMA_VERSION}`, raw); } catch (e) { /* senza spazio si procede: l'originale resta nel backup */ }
+      try { localStorage.setItem(LOCAL_KEY, JSON.stringify(r.state)); } catch (e) { /* si riprova al prossimo salvataggio */ }
+    }
+    return r.state;
+  } catch (e) {
+    lockData(`l'aggiornamento dei dati non è riuscito (${e.message})`, raw);
+    return defaultState();
   }
-  return defaultState();
 }
-function saveLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); return true; } catch (e) { return false; } }
+function saveLocal() {
+  if (dataLock) return false;   // sola lettura: i dati originali non si sovrascrivono
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); return true; } catch (e) { return false; }
+}
 
 let state = loadLocal();
 let currentMonth = monthOf(todayISO());
@@ -2343,15 +2430,101 @@ function exportCsv() {
   if (list.some((m) => m.kind === "inv")) lines.push(["", "", "", q("Investito netto (non è una spesa)"), num(-invNet)].join(";"));
   offerFile(`movimenti_${currentMonth}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
 }
-async function exportJson() {
-  const ok = await offerFile(`budget_backup_${todayISO()}.json`, JSON.stringify(state, null, 2), "application/json");
+/* --- Backup cifrato (v3.2): PBKDF2-SHA-256 + AES-GCM 256 del Web Crypto API, nessuna libreria esterna.
+   La frase segreta non viene mai salvata: se si perde, il backup non si può aprire. --- */
+const BACKUP_FORMAT = "budget-backup", BACKUP_FORMAT_VERSION = 1, KDF_ITERATIONS = 600000, PASS_MIN = 10;
+function toB64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function fromB64(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+async function deriveKey(pass, salt, iterations) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass.normalize("NFC")), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+/** I metadati in chiaro sono legati al contenuto cifrato: se qualcuno li altera, la decifratura fallisce. */
+const backupAad = (h) => new TextEncoder().encode([h.format, h.formatVersion, h.schemaVersion, h.createdAt, h.kdf.iterations].join("|"));
+async function encryptBackup(s, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const h = { format: BACKUP_FORMAT, formatVersion: BACKUP_FORMAT_VERSION, schemaVersion: s.schemaVersion || SCHEMA_VERSION, appVersion: APP_VERSION,
+    createdAt: new Date().toISOString(), kdf: { name: "PBKDF2", hash: "SHA-256", iterations: KDF_ITERATIONS, salt: toB64(salt) }, cipher: { name: "AES-GCM", iv: toB64(iv) } };
+  const key = await deriveKey(pass, salt, KDF_ITERATIONS);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: backupAad(h) }, key, new TextEncoder().encode(JSON.stringify(s)));
+  return JSON.stringify({ ...h, data: toB64(new Uint8Array(ct)) });
+}
+async function decryptBackup(o, pass) {
+  if (o.formatVersion !== BACKUP_FORMAT_VERSION || !o.kdf || o.kdf.name !== "PBKDF2" || o.kdf.hash !== "SHA-256" || !o.cipher || o.cipher.name !== "AES-GCM") throw new Error("formato del backup non supportato");
+  if (!(o.kdf.iterations >= 100000 && o.kdf.iterations <= 10000000)) throw new Error("parametri del backup non validi");
+  const key = await deriveKey(pass, fromB64(o.kdf.salt), o.kdf.iterations);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(o.cipher.iv), additionalData: backupAad(o) }, key, fromB64(o.data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+const cryptoOk = () => !!(window.crypto && crypto.subtle && window.isSecureContext !== false);
+/** Chiede la frase segreta. confirm = nuova frase (due campi, lunghezza minima). Restituisce null se si annulla. */
+function askPassphrase({ title, hint = "", confirm = false }) {
+  return new Promise((resolve) => {
+    $("passTitle").textContent = title; $("passHint").textContent = hint;
+    $("passInput").value = ""; $("passInput2").value = ""; $("passErr").textContent = "";
+    $("passInput").setAttribute("autocomplete", confirm ? "new-password" : "current-password");
+    $("passConfirmWrap").hidden = !confirm; $("passModal").hidden = false; $("passInput").focus();
+    const done = (v) => { $("passModal").hidden = true; $("passInput").value = ""; $("passInput2").value = ""; $("passOk").onclick = $("passCancel").onclick = null; resolve(v); };
+    $("passOk").onclick = () => {
+      const a = $("passInput").value;
+      if (!a) { $("passErr").textContent = "Inserisci la frase segreta."; return; }
+      if (confirm && [...a].length < PASS_MIN) { $("passErr").textContent = `Almeno ${PASS_MIN} caratteri: meglio 4 parole a caso.`; return; }
+      if (confirm && a !== $("passInput2").value) { $("passErr").textContent = "Le due frasi non coincidono."; return; }
+      done(a);
+    };
+    $("passCancel").onclick = () => done(null);
+  });
+}
+async function exportJson() {   // nome storico del pulsante: dalla v3.2 salva solo backup cifrati
+  if (dataLock) { toast("over", "Dati in sola lettura: salva prima i dati originali dall'avviso in alto."); return; }
+  if (!cryptoOk()) { toast("over", "Cifratura non disponibile in questa finestra: apri l'app dalla schermata Home."); return; }
+  const pass = await askPassphrase({ title: "Frase segreta del backup",
+    hint: "Serve per aprire il backup. Non viene salvata da nessuna parte: se la dimentichi, il backup non si può recuperare. Scrivila in un posto sicuro.", confirm: true });
+  if (pass == null) return;
+  toast("info", "Cifratura in corso…", 2000);
+  let content;
+  try { content = await encryptBackup(state, pass); } catch (e) { toast("over", "Cifratura non riuscita: nessun file creato."); return; }
+  // il salvataggio parte da un tocco nuovo: iOS richiede un gesto recente per aprire il menu Condividi
+  if (!(await askConfirm("Backup cifrato pronto. Salvalo su File o inviatelo per email.", "Salva file"))) return;
+  const ok = await offerFile(`budget-backup-${todayISO()}.json`, content, "application/json");
   if (ok) { try { localStorage.setItem(BACKUP_KEY, todayISO()); } catch (e) { /* facoltativo */ } renderNotices(); }
+}
+/** Legge un file di backup (cifrato o in chiaro delle versioni precedenti) e lo porta allo schema corrente. */
+async function readBackupFile(file) {
+  let obj;
+  try { obj = JSON.parse(await file.text()); } catch (e) { throw new Error("il file non è un backup di questa app"); }
+  let data = obj, encrypted = false;
+  if (obj && obj.format === BACKUP_FORMAT) {
+    if (!cryptoOk()) throw new Error("cifratura non disponibile in questa finestra");
+    const pass = await askPassphrase({ title: "Frase segreta del backup", hint: "La frase scelta quando hai salvato questo backup." });
+    if (pass == null) return null;
+    try { data = await decryptBackup(obj, pass); } catch (e) { throw new Error(e.message && e.message.startsWith("formato") ? e.message : "frase segreta errata o file danneggiato"); }
+    encrypted = true;
+  }
+  if (!data || !isValidState(data)) throw new Error("il file non è un backup di questa app");
+  const r = runMigrations(data);
+  return { ...r, encrypted, createdAt: obj.createdAt || null };
+}
+/** Riepilogo di uno stato senza toccare quello in uso. */
+function previewOf(s) {
+  const saved = state; let liq = null;
+  try { state = s; const l = liquidityAt(todayISO()); liq = l ? l.value : null; } catch (e) { liq = null; } finally { state = saved; }
+  const c = countRecords(s);
+  return `${c.moves} movimenti, ${c.checkpoints} controlli dei saldi, ${c.goals} obiettivi, ${c.recurring} ricorrenti. Liquidità calcolata oggi: ${liq == null ? "—" : fmtEur(liq)}.`;
+}
+async function verifyBackup(file) {
+  try {
+    const r = await readBackupFile(file); if (!r) return;
+    toast("info", `<strong>Backup leggibile${r.encrypted ? " (cifrato)" : " (in chiaro)"}.</strong> ${previewOf(r.state)} I dati attuali non sono stati modificati.`, 15000);
+  } catch (e) { toast("over", `Backup non utilizzabile: ${escapeHtml(e.message)}.`); }
 }
 /* --- Senza account (versione per iPhone): benvenuto e promemoria di backup --- */
 const BACKUP_KEY = "budgetMensile.lastBackup", WELCOME_KEY = "budgetMensile.welcomeDone";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 function renderNotices() {
-  $("appVersion").textContent = "Versione " + APP_VERSION;
+  $("appVersion").textContent = `Versione ${APP_VERSION} · dati schema ${state.schemaVersion || "—"}`;
+  $("dataLock").hidden = !dataLock;
+  if (dataLock) $("dataLockText").textContent = `All'avvio ${dataLock.reason}. I dati originali non sono stati toccati: salvane una copia prima di qualsiasi altra operazione.`;
   const standalone = !cloud.available;
   $("welcome").hidden = !standalone || hasUserData(state) || !!lsGet(WELCOME_KEY);
   const last = lsGet(BACKUP_KEY);
@@ -2361,22 +2534,18 @@ function renderNotices() {
   if (show) $("backupNagText").innerHTML = `<strong>${days == null ? "Nessun backup salvato." : `Ultimo backup ${days} giorni fa.`}</strong> I dati sono solo su questo dispositivo: se lo perdi o lo ripristini, senza backup non si recuperano.`;
 }
 const allMonths = (s) => [...new Set([...s.expenses, ...s.incomes].map((e) => monthOf(e.date)))];
-function importJson(file) {
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const s = JSON.parse(reader.result);
-      if (!isValidState(s)) throw new Error("formato");
-      if (!(await askConfirm("Sostituire tutti i dati attuali con quelli del backup?", "Sostituisci"))) return;
-      const oldMonths = allMonths(state);
-      state = normalizeState(s);
-      persist([...new Set([...oldMonths, ...allMonths(state)])]); resetCharts(); render();
-      try { localStorage.setItem(BACKUP_KEY, todayISO()); localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* facoltativo */ }
-      renderNotices();
-      toast("info", "Backup ripristinato.", 3000);
-    } catch (e) { toast("over", "File non valido: scegli un backup scaricato da questa pagina."); }
-  };
-  reader.readAsText(file);
+async function importJson(file) {
+  let r;
+  try { r = await readBackupFile(file); if (!r) return; } catch (e) { toast("over", `Backup non utilizzabile: ${escapeHtml(e.message)}.`); return; }
+  const plainNote = r.encrypted ? "" : " È un backup in chiaro: dopo il ripristino salvane uno cifrato ed elimina questo file.";
+  if (!(await askConfirm(`Backup${r.encrypted ? " cifrato" : ""}: ${previewOf(r.state)} Sostituire tutti i dati attuali?${plainNote}`, "Sostituisci"))) return;
+  try { if (!dataLock) localStorage.setItem(LOCAL_KEY + ".before-restore", JSON.stringify(state)); } catch (e) { /* spazio esaurito */ }
+  const oldMonths = allMonths(state);
+  dataLock = null; state = r.state;
+  persist([...new Set([...oldMonths, ...allMonths(state)])]); resetCharts(); render();
+  try { localStorage.setItem(BACKUP_KEY, todayISO()); localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* facoltativo */ }
+  renderNotices();
+  toast("info", "Backup ripristinato.", 3000);
 }
 /** Dati demo: solo su richiesta, nel mese selezionato, marcati "demo" e rimovibili in un colpo. */
 async function loadDemo() {
@@ -2569,8 +2738,15 @@ function bindEvents() {
   $("backupNow").addEventListener("click", exportJson);
   $("welcomeImport").addEventListener("click", () => $("importFile").click());
   $("welcomeSkip").addEventListener("click", () => { try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* facoltativo */ } renderNotices(); });
-  $("importJson").addEventListener("click", () => $("importFile").click());
-  $("importFile").addEventListener("change", (ev) => { if (ev.target.files[0]) importJson(ev.target.files[0]); ev.target.value = ""; });
+  $("importJson").addEventListener("click", () => { importMode = "restore"; $("importFile").click(); });
+  let importMode = "restore";
+  $("verifyBackup").addEventListener("click", () => { importMode = "verify"; $("importFile").click(); });
+  $("importFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; ev.target.value = ""; const m = importMode; importMode = "restore"; if (f) (m === "verify" ? verifyBackup : importJson)(f); });
+  $("lockSave").addEventListener("click", () => { if (dataLock) offerFile(`budget-dati-originali-${todayISO()}.json`, dataLock.raw, "application/json"); });
+  $("lockReset").addEventListener("click", async () => {
+    if (!(await askConfirm("Ricominciare da zero? I dati originali restano nella copia di emergenza del dispositivo e nel file che hai salvato.", "Ricomincia"))) return;
+    dataLock = null; state = defaultState(); persist(); resetCharts(); render(); renderNotices();
+  });
   $("loadDemo").addEventListener("click", loadDemo);
   $("removeDemo").addEventListener("click", removeDemo);
   $("resetAll").addEventListener("click", resetAll);
