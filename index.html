@@ -200,6 +200,22 @@ header.top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center
 .nw-list { margin-top: 12px; }
 .nw-list div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .chart-box.small-chart { height: 180px; margin-top: 12px; }
+.nw-blocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+@media (max-width: 640px) { .nw-blocks { grid-template-columns: minmax(0, 1fr); } }
+.nw-block { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--surface-2); }
+.nw-bt { font-weight: 650; font-size: .9rem; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.nw-bv { font-size: 1.45rem; font-weight: 750; margin: 2px 0 4px; }
+.nw-acc { margin-top: 8px; }
+.nw-acc div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: .88rem; }
+.nw-hist { margin-top: 12px; }
+.nw-hist summary { cursor: pointer; font-weight: 600; font-size: .9rem; padding: 8px 0; min-height: 44px; display: flex; align-items: center; gap: 8px; list-style: none; }
+.nw-hist summary::-webkit-details-marker { display: none; }
+.nw-hist summary::before { content: "›"; font-size: 1.2rem; transition: transform .2s; color: var(--muted); }
+.nw-hist[open] summary::before { transform: rotate(90deg); }
+.nw-h { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.nw-group { font-weight: 650; font-size: .86rem; margin: 12px 0 6px; }
+.nw-check { margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: .9rem; }
+.nw-check:empty { display: none; }
 .nw-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 7.5rem 2.75rem; gap: 6px; align-items: center; margin-bottom: 8px; }
 .nw-row select { grid-column: 2 / 3; }
 .icon-in { text-align: center; padding: 6px 2px; }
@@ -471,7 +487,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       </div>
       <div class="filters">
         <input class="search" type="search" id="fSearch" placeholder="Cerca per descrizione, categoria o fonte" aria-label="Cerca" autocomplete="off">
-        <select id="fType" aria-label="Tipo"><option value="all">Tutti</option><option value="exp">Solo spese</option><option value="inc">Solo entrate</option></select>
+        <select id="fType" aria-label="Tipo"><option value="all">Tutti</option><option value="exp">Solo spese</option><option value="inc">Solo entrate</option><option value="inv">Solo investimenti</option></select>
         <select id="fCatFilter" aria-label="Categoria o fonte"></select>
         <select id="fSort" aria-label="Ordina"><option value="date-desc">Più recenti</option><option value="date-asc">Meno recenti</option><option value="amt-desc">Importo più alto</option><option value="amt-asc">Importo più basso</option></select>
       </div>
@@ -489,10 +505,14 @@ tr.total td { font-weight: 650; border-bottom: none; }
   <!-- ========================== SCHEDA: OBIETTIVI ========================== -->
   <section class="stack" id="panel-obiettivi" role="tabpanel" aria-labelledby="tab-obiettivi" hidden>
     <section class="card" id="nwCard" aria-labelledby="nwTitle">
-      <div class="card-head"><h2 id="nwTitle">Patrimonio</h2><button class="primary" id="nwEdit">Aggiorna valori</button></div>
+      <div class="card-head"><h2 id="nwTitle">Patrimonio</h2><button class="primary" id="nwEdit">Controllo saldi</button></div>
       <div id="nwEmpty" hidden>
-        <p class="small muted">Tieni traccia di quanto possiedi: investimenti, conti, carte e contanti. Una volta al mese aggiorni i valori e vedi come cambia nel tempo.</p>
+        <p class="small muted">Tieni traccia di quanto possiedi. La liquidità (conto, prepagata, contanti) si aggiorna da sola con le entrate e le spese che registri; gli investimenti restano separati, al valore di mercato.</p>
         <div class="btn-row" style="margin-top:10px"><button id="nwPreset">+ Crea ETF, conto, prepagata e contanti</button></div>
+      </div>
+      <div id="nwStart" hidden>
+        <p class="small muted">Manca il punto di partenza: inserisci i saldi reali di oggi. Da lì il patrimonio si aggiorna con i movimenti.</p>
+        <div class="btn-row" style="margin-top:10px"><button class="primary" id="nwStartBtn">Imposta il punto di partenza</button></div>
       </div>
       <div id="nwBody" hidden>
         <div class="nw-top">
@@ -501,10 +521,11 @@ tr.total td { font-weight: 650; border-bottom: none; }
         </div>
         <div class="nw-split" id="nwSplit"></div>
         <div class="nw-legend" id="nwLegend"></div>
+        <div class="alert warn" id="nwDue" hidden style="margin-top:12px"><span class="ic" aria-hidden="true">🔎</span><div><span id="nwDueText"></span><div class="btn-row" style="margin-top:8px"><button class="primary" id="nwDueBtn">Fai il controllo</button></div></div></div>
+        <div class="nw-blocks"><div class="nw-block" id="nwLiq"></div><div class="nw-block" id="nwInv"></div></div>
         <div class="chart-box small-chart" id="nwChartBox" hidden><canvas id="nwChart" role="img" aria-label="Andamento del patrimonio"></canvas></div>
         <div class="small muted" id="nwChartNote" style="margin-top:8px"></div>
-        <div class="nw-list" id="nwList"></div>
-        <div class="small muted" id="nwGoals" style="margin-top:8px"></div>
+        <details class="nw-hist"><summary>Storico dei controlli e scarti</summary><div id="nwHist"></div></details>
       </div>
     </section>
     <section class="card">
@@ -610,6 +631,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="seg" role="group" aria-label="Tipo di movimento" style="margin-bottom:12px">
         <button type="button" id="typeExp" aria-pressed="true">Spesa</button>
         <button type="button" id="typeInc" aria-pressed="false">Entrata</button>
+        <button type="button" id="typeInv" aria-pressed="false">Investimento</button>
       </div>
       <div class="quick" id="quickRow" hidden>
         <div class="small muted">Spese frequenti</div>
@@ -628,6 +650,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="field">
         <label id="catGridLabel">Categoria</label><span class="suggest" id="catSuggest" hidden>✨ scelta dalla descrizione</span>
         <div class="cat-grid" id="catGrid" role="group" aria-labelledby="catGridLabel"></div>
+        <div class="hint" id="invHint" hidden>Versamento: soldi che dal conto finiscono negli investimenti (es. acquisto di ETF). Disinvestimento: una vendita che torna sul conto. Non contano nel budget e non cambiano il patrimonio totale. Commissioni e bolli invece sono spese: registrale come spesa.</div>
         <div class="err" id="eCat"></div>
       </div>
       <div class="field" style="max-width:260px">
@@ -707,8 +730,11 @@ tr.total td { font-weight: 650; border-bottom: none; }
     <div class="card-head"><h2 id="nwSheetTitle">Valori del patrimonio</h2><button class="icon" id="nwClose" aria-label="Chiudi">✕</button></div>
     <p class="small muted" style="margin-bottom:10px" id="nwSheetHint"></p>
     <form id="nwForm" novalidate>
+      <div class="field" style="max-width:240px"><label for="nwDate">Saldi al giorno</label><div class="hint" id="nwDateHint">Oggi: i saldi di adesso. Giorno passato: a fine giornata.</div><input type="date" id="nwDate"></div>
       <div id="nwRows"></div>
+      <div class="hint" id="nwInvNote"></div>
       <button type="button" class="link" id="nwAdd">+ Aggiungi voce</button>
+      <div class="nw-check" id="nwCheck" aria-live="polite"></div>
       <div class="err" id="eNw"></div>
       <div class="btn-row" style="margin-top:10px"><button type="submit" class="primary" style="flex:1">Salva</button></div>
     </form>
@@ -749,6 +775,8 @@ const DEFAULT_ICONS = { "casa": "🏠", "alimentari": "🛒", "trasporti": "🚗
   "cene e bar": "🍕", "vacanze": "🏖️", "compenso studio": "💼", "calcio": "⚽", "famiglia": "👪" };
 const iconFor = (name, fallback) => DEFAULT_ICONS[String(name).toLowerCase()] || fallback;
 /* Voci del patrimonio proposte (solo nomi: i valori li inserisci tu) */
+/* Movimenti "Investimento": spostano denaro tra liquidità e investimenti (non sono spese né entrate) */
+const TRANSFER_TYPES = [{ id: "in", name: "Versamento", icon: "📈", hint: "dalla liquidità agli investimenti" }, { id: "out", name: "Disinvestimento", icon: "💶", hint: "dagli investimenti alla liquidità" }];
 const PLAN_ASSETS = [["ETF (conto titoli)", "invest", "📈"], ["Conto corrente BPER", "liquid", "🏦"], ["Carta prepagata", "liquid", "💳"], ["Contanti", "liquid", "💶"]];
 // Obiettivi suggeriti: importi decisi nel piano finanziario del cliente
 const PLAN_GOALS = [
@@ -841,7 +869,7 @@ function defaultState() {
     categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: "c" + uid() + i, name, colorIdx: i, icon: iconFor(name, "🏷️") })),
     nextColorIdx: DEFAULT_CATEGORIES.length,
     incomeSources: DEFAULT_SOURCES.map(([name, family], i) => ({ id: "s" + uid() + i, name, family, icon: iconFor(name, "💶") })),
-    budgets: {}, expenses: [], incomes: [], recurring: [], recurringDone: {}, goals: [], assets: [], assetSnapshots: {}, watchCatId: null
+    budgets: {}, expenses: [], incomes: [], recurring: [], recurringDone: {}, goals: [], assets: [], assetSnapshots: {}, transfers: [], checkpoints: [], watchCatId: null
   };
 }
 function isValidState(s) {
@@ -861,15 +889,27 @@ function normalizeState(s) {
   s.incomeSources.forEach((x) => { if (!x.icon) x.icon = iconFor(x.name, "💶"); });
   if (!Array.isArray(s.assets)) s.assets = [];
   if (!s.assetSnapshots || typeof s.assetSnapshots !== "object") s.assetSnapshots = {};
+  if (!Array.isArray(s.transfers)) s.transfers = [];
+  if (!Array.isArray(s.checkpoints)) s.checkpoints = [];
+  // v3.0 → v3.1: i valori mensili del patrimonio diventano "saldi reali" datati
+  if (!s.checkpoints.length && Object.keys(s.assetSnapshots).length) {
+    const kindOf = (id) => (s.assets.find((a) => a.id === id) || {}).kind;
+    const nowYm = monthOf(todayISO());
+    for (const [ym, snap] of Object.entries(s.assetSnapshots).sort()) {
+      const pick = (k) => { const o = {}; for (const [id, v] of Object.entries(snap)) if (kindOf(id) === k && typeof v === "number") o[id] = v; return Object.keys(o).length ? o : null; };
+      s.checkpoints.push({ id: "k" + ym, date: ym >= nowYm ? todayISO() : `${ym}-${pad(daysInMonth(ym))}`, liquid: pick("liquid"), invest: pick("invest"), expectedLiquid: null });
+    }
+    s.assetSnapshots = {};
+  }
   // categoria da tenere d'occhio ogni settimana (predefinita: "Cene e bar"); null = nessuna
   if (s.watchCatId === undefined || (s.watchCatId && !s.categories.some((c) => c.id === s.watchCatId)))
     s.watchCatId = (s.categories.find((c) => c.name.toLowerCase() === "cene e bar") || {}).id || null;
   const dedupe = (arr) => { const seen = new Set(); return arr.filter((x) => !seen.has(x.id) && seen.add(x.id)); };
-  s.expenses = dedupe(s.expenses); s.incomes = dedupe(s.incomes);
+  s.expenses = dedupe(s.expenses); s.incomes = dedupe(s.incomes); s.transfers = dedupe(s.transfers || []);
   delete s.theme;
   return s;
 }
-const hasUserData = (s) => s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0 || (s.assets || []).length > 0;
+const hasUserData = (s) => s.expenses.length > 0 || s.incomes.length > 0 || Object.keys(s.budgets).length > 0 || s.goals.length > 0 || s.recurring.length > 0 || (s.assets || []).length > 0 || (s.transfers || []).length > 0 || (s.checkpoints || []).length > 0;
 
 function loadLocal() {
   let raw = null;
@@ -932,6 +972,7 @@ function project(s) {
   put("meta", { nextColorIdx: s.nextColorIdx, watchCatId: s.watchCatId ?? null });
   (s.assets || []).forEach((a, o) => put("ast_" + a.id, { ...a, o }));
   Object.entries(s.assetSnapshots || {}).forEach(([ym, snap]) => put("snap_" + ym, snap));
+  (s.checkpoints || []).forEach((k) => put("chk_" + k.id, k));
   Object.entries(s.budgets).forEach(([ym, b]) => put("bud_" + ym, b));
   s.recurring.forEach((r) => put("rec_" + r.id, r));
   Object.entries(s.recurringDone).forEach(([ym, ids]) => ids.forEach((id) => put(`done_${ym}_${id}`, 1)));
@@ -943,23 +984,25 @@ function project(s) {
   const mv = (kind, e) => { const d = mvDocId(monthOf(e.date)); (out[d] = out[d] || {})[e.id] = JSON.stringify({ ...e, kind }); };
   s.expenses.forEach((e) => mv("exp", e));
   s.incomes.forEach((e) => mv("inc", e));
+  (s.transfers || []).forEach((e) => mv("inv", e));
   return out;
 }
 /** Entità { documento: { chiave: {t, v} } } → stato dell'app (null se mancano le categorie). */
 function fromEntities(ent) {
-  const s = { version: 2, categories: [], incomeSources: [], nextColorIdx: 0, budgets: {}, expenses: [], incomes: [], recurring: [], recurringDone: {}, goals: [], assets: [], assetSnapshots: {} };
+  const s = { version: 2, categories: [], incomeSources: [], nextColorIdx: 0, budgets: {}, expenses: [], incomes: [], recurring: [], recurringDone: {}, goals: [], assets: [], assetSnapshots: {}, transfers: [], checkpoints: [] };
   const goals = {}, deps = [];
   for (const [doc, map] of Object.entries(ent)) {
     for (const [key, e] of Object.entries(map)) {
       if (!e || e.v == null) continue;
       let v; try { v = JSON.parse(e.v); } catch (err) { continue; }
-      if (doc !== CFG_DOC) { const { kind, ...m } = v; (kind === "inc" ? s.incomes : s.expenses).push(m); continue; }
+      if (doc !== CFG_DOC) { const { kind, ...m } = v; (kind === "inc" ? s.incomes : kind === "inv" ? (s.transfers = s.transfers || []) : s.expenses).push(m); continue; }
       const [type, a, b] = key.split("_");
       if (type === "cat") s.categories.push(v);
       else if (type === "src") s.incomeSources.push(v);
       else if (type === "meta") { s.nextColorIdx = v.nextColorIdx || 0; if (v.watchCatId !== undefined) s.watchCatId = v.watchCatId; }
       else if (type === "ast") (s.assets = s.assets || []).push(v);
       else if (type === "snap") (s.assetSnapshots = s.assetSnapshots || {})[a] = v;
+      else if (type === "chk") (s.checkpoints = s.checkpoints || []).push(v);
       else if (type === "bud") s.budgets[a] = v;
       else if (type === "rec") s.recurring.push(v);
       else if (type === "done") (s.recurringDone[a] = s.recurringDone[a] || []).push(b);
@@ -1196,7 +1239,7 @@ function materializeRecurring() {
       if (done.includes(r.id)) continue;
       const date = recDate(r, ym);
       if (date > today) continue;
-      const item = { id: `r-${r.id}-${ym}`, date, amount: r.amount, desc: r.desc, recId: r.id };
+      const item = { id: `r-${r.id}-${ym}`, date, amount: r.amount, desc: r.desc, recId: r.id, ts: Date.now() };
       const list = r.type === "exp" ? state.expenses : state.incomes;
       if (!list.some((x) => x.id === item.id)) {
         if (r.type === "exp") { item.catId = catById(r.refId) ? r.refId : state.categories[0].id; state.expenses.push(item); }
@@ -1235,7 +1278,8 @@ function computeSummary(ym) {
   const income = incs.reduce((s, e) => s + e.amount, 0);
   const familyIncome = incs.filter((e) => srcById(e.sourceId)?.family).reduce((s, e) => s + e.amount, 0);
   const goalDeposits = state.goals.reduce((s, g) => s + g.deposits.filter((d) => monthOf(d.date) === ym).reduce((a, d) => a + d.amount, 0), 0);
-  return { budget: b, rows, list, incs, catBudgetSum, totalSpent, income, familyIncome, ownIncome: income - familyIncome, goalDeposits,
+  const invested = state.transfers.filter((t) => monthOf(t.date) === ym).reduce((a, t) => a + (t.dir === "out" ? -t.amount : t.amount), 0);
+  return { budget: b, rows, list, incs, catBudgetSum, totalSpent, income, familyIncome, ownIncome: income - familyIncome, goalDeposits, invested,
     total: { budget: totalBudget, spent: totalSpent, left: totalBudget - totalSpent, pct: totalPct, level: levelOf(totalPct), fromCats: !(b.total > 0) } };
 }
 /** "Puoi spendere oggi": residuo del budget meno spese ricorrenti in arrivo, diviso i giorni rimasti (oggi compreso). */
@@ -1396,7 +1440,8 @@ function renderMonth(sum) {
     <tr class="total"><td>Saldo del mese</td><td class="r num ${bal < 0 ? "neg" : bal > 0 ? "pos" : ""}">${fmtSigned(bal)}</td></tr>
     <tr><td>Tasso di risparmio</td><td class="r num">${rate(sum.income, t.spent)}</td></tr>
     <tr><td>Saldo senza aiuti</td><td class="r num ${own < 0 ? "neg" : ""}">${fmtSigned(own)}</td></tr>
-    <tr><td>Versato negli obiettivi</td><td class="r num">${fmtEur(sum.goalDeposits)}</td></tr>`;
+    <tr><td>Versato negli obiettivi</td><td class="r num">${fmtEur(sum.goalDeposits)}</td></tr>`
+    + (sum.invested ? `<tr><td>Investito nel mese (netto)</td><td class="r num">${fmtSigned(sum.invested)}</td></tr>` : "");
 
   const cell = (r, name) => `
       <td class="r num" data-l="Budget">${r.budget > 0 ? fmtEur(r.budget) : "—"}</td>
@@ -1511,7 +1556,9 @@ function showDay(iso) {
 }
 
 /* --- Scheda Movimenti: ricerca, filtri e ordinamento --- */
-function allMovesOf(ym) { return [...expensesOf(ym).map((e) => ({ ...e, kind: "exp" })), ...incomesOf(ym).map((e) => ({ ...e, kind: "inc" }))]; }
+const transfersOf = (ym) => state.transfers.filter((e) => monthOf(e.date) === ym).sort(byDateDesc);
+const trType = (dir) => TRANSFER_TYPES.find((x) => x.id === dir) || TRANSFER_TYPES[0];
+function allMovesOf(ym) { return [...expensesOf(ym).map((e) => ({ ...e, kind: "exp" })), ...incomesOf(ym).map((e) => ({ ...e, kind: "inc" })), ...transfersOf(ym).map((e) => ({ ...e, kind: "inv" }))]; }
 function renderMoves() {
   const sel = $("fCatFilter"), keep = sel.value || "all";
   sel.innerHTML = `<option value="all">Tutte le voci</option>` +
@@ -1522,22 +1569,23 @@ function renderMoves() {
   const list = allMovesOf(currentMonth).filter((m) => {
     if (type !== "all" && m.kind !== type) return false;
     if (cf !== "all") { const [k, id] = cf.split(":"); if (k === "c" && (m.kind !== "exp" || m.catId !== id)) return false; if (k === "s" && (m.kind !== "inc" || m.sourceId !== id)) return false; }
-    if (q) { const label = m.kind === "exp" ? catById(m.catId)?.name : srcById(m.sourceId)?.name; if (!`${m.desc || ""} ${label || ""}`.toLowerCase().includes(q)) return false; }
+    if (q) { const label = m.kind === "exp" ? catById(m.catId)?.name : m.kind === "inv" ? trType(m.dir).name + " investimento" : srcById(m.sourceId)?.name; if (!`${m.desc || ""} ${label || ""}`.toLowerCase().includes(q)) return false; }
     return true;
   });
   const cmp = { "date-desc": byDateDesc, "date-asc": (a, b) => -byDateDesc(a, b), "amt-desc": (a, b) => b.amount - a.amount, "amt-asc": (a, b) => a.amount - b.amount }[sort];
   list.sort(cmp);
   const exp = list.filter((m) => m.kind === "exp").reduce((s, m) => s + m.amount, 0), inc = list.filter((m) => m.kind === "inc").reduce((s, m) => s + m.amount, 0);
-  $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)} · entrate ${fmtEur(inc)}`;
+  const inv = list.filter((m) => m.kind === "inv").reduce((s, m) => s + (m.dir === "out" ? -m.amount : m.amount), 0);
+  $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)} · entrate ${fmtEur(inc)}${list.some((m) => m.kind === "inv") ? " · investito " + fmtSigned(inv) : ""}`;
   $("moveEmpty").hidden = list.length > 0;
   $("moveBody").innerHTML = list.map((m) => {
-    const isExp = m.kind === "exp", ref = isExp ? catById(m.catId) : srcById(m.sourceId);
-    const dot = isExp ? (ref ? colorOf(ref) : OTHER_COLOR) : "var(--income)";
+    const isExp = m.kind === "exp", isInv = m.kind === "inv", ref = isExp ? catById(m.catId) : isInv ? trType(m.dir) : srcById(m.sourceId);
+    const dot = isExp ? (ref ? colorOf(ref) : OTHER_COLOR) : isInv ? "var(--muted)" : "var(--income)";
     return `<tr data-id="${m.id}" data-kind="${m.kind}">
       <td class="num">${fmtDate(m.date)}</td>
-      <td><span class="dot" style="background:${dot}"></span><span class="emo">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span> ${escapeHtml(ref ? ref.name : "(eliminata)")}${isExp ? "" : ' <span class="badge in">entrata</span>'}</td>
+      <td><span class="dot" style="background:${dot}"></span><span class="emo">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span> ${escapeHtml(ref ? ref.name : "(eliminata)")}${isExp ? "" : isInv ? ' <span class="badge">investimento</span>' : ' <span class="badge in">entrata</span>'}</td>
       <td>${escapeHtml(m.desc || "")}${m.recId ? ' <span class="badge">ricorrente</span>' : ""}${m.demo ? ' <span class="badge">demo</span>' : ""}</td>
-      <td class="r num"><strong class="${isExp ? "" : "pos"}">${isExp ? "−" : "+"}${fmtEur(m.amount)}</strong></td>
+      <td class="r num"><strong class="${isExp || isInv ? "" : "pos"}">${isInv ? "⇄ " : isExp ? "−" : "+"}${fmtEur(m.amount)}</strong></td>
       <td class="r actions"><button class="link" data-act="edit">Modifica</button><button class="link danger" data-act="del">Elimina</button></td>
     </tr>`;
   }).join("");
@@ -1573,38 +1621,93 @@ function renderGoals() {
   }).join("");
 }
 
-/* --- Patrimonio: voci (investimenti, conti, contanti) e valori mese per mese, inseriti a mano --- */
+/* --- Patrimonio: liquidità che si aggiorna con i movimenti, investimenti al valore di mercato ---
+   Punto di partenza e controlli mensili = "saldi reali" datati (a fine giornata).
+   Liquidità oggi   = saldi reali dell'ultimo controllo + entrate − spese − versamenti + disinvestimenti successivi.
+   Investimenti oggi = ultimo valore di mercato inserito + versamenti − disinvestimenti successivi (al prezzo pagato).
+   Lo scarto tra liquidità prevista e reale al controllo misura le spese non registrate. */
 const KIND_LABEL = { invest: "Investimenti", liquid: "Liquidità" };
 const kindColor = (k) => (k === "invest" ? palette()[6] : palette()[2]);
-const nwKeyFor = (ym) => Object.keys(state.assetSnapshots).filter((k) => k <= ym).sort().pop() || null;
-function nwTotals(key) {
-  const snap = (key && state.assetSnapshots[key]) || {}, by = { invest: 0, liquid: 0 };
-  let tot = 0, n = 0;
-  state.assets.forEach((a) => { const v = snap[a.id]; if (typeof v === "number") { tot += v; by[a.kind] = (by[a.kind] || 0) + v; n++; } });
-  return { tot, by, snap, n };
+const sumVals = (o) => Object.values(o || {}).reduce((a, v) => a + (typeof v === "number" ? v : 0), 0);
+const byDateAsc = (a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0);
+/** Ultimo controllo che contiene quel gruppo, fino alla data (esclusa una data specifica, per ricalcolare il "previsto"). */
+function cpLatest(group, atDate, excludeDate = null) {
+  return state.checkpoints.filter((k) => k[group] && k.date <= atDate && k.date !== excludeDate).sort(byDateAsc).pop() || null;
 }
+/** Movimenti successivi al controllo (data > from, oppure stesso giorno ma registrati dopo il controllo) e fino a "to". */
+function flowsBetween(from, to, fromTs = null) {
+  const inR = (e) => e.date <= to && (e.date > from || (e.date === from && fromTs && e.ts && e.ts > fromTs)), tot = (arr) => arr.reduce((a, e) => a + e.amount, 0);
+  const inc = tot(state.incomes.filter(inR)), exp = tot(state.expenses.filter(inR));
+  const tin = tot(state.transfers.filter((e) => inR(e) && e.dir !== "out")), tout = tot(state.transfers.filter((e) => inR(e) && e.dir === "out"));
+  return { inc, exp, tin, tout, liquid: inc - exp - tin + tout, invest: tin - tout };
+}
+function liquidityAt(atDate, excludeDate = null) {
+  const cp = cpLatest("liquid", atDate, excludeDate); if (!cp) return null;
+  const f = flowsBetween(cp.date, atDate, cp.ts), base = sumVals(cp.liquid);
+  return { cp, base, f, value: base + f.liquid };
+}
+function investAt(atDate, excludeDate = null) {
+  const cp = cpLatest("invest", atDate, excludeDate); if (!cp) return null;
+  const f = flowsBetween(cp.date, atDate, cp.ts), base = sumVals(cp.invest);
+  return { cp, base, f, value: base + f.invest };
+}
+function netWorthAt(atDate) {
+  const l = liquidityAt(atDate), i = investAt(atDate);
+  return l || i ? { l, i, total: (l ? l.value : 0) + (i ? i.value : 0) } : null;
+}
+const monthEnd = (ym) => `${ym}-${pad(daysInMonth(ym))}`;
+const nwDateFor = (ym) => (ym < monthOf(todayISO()) ? monthEnd(ym) : todayISO());
 function renderNetWorth() {
-  const has = state.assets.length > 0;
-  $("nwEmpty").hidden = has; $("nwBody").hidden = !has; $("nwEdit").hidden = !has;
-  if (!has) return;
-  const key = nwKeyFor(currentMonth), cur = nwTotals(key);
-  $("nwAsOf").textContent = key ? `Valori di ${monthLabel(key).toLowerCase()}${key !== currentMonth ? " · ultimo aggiornamento" : ""}` : "Nessun valore ancora inserito";
-  $("nwTotal").textContent = key ? fmtEur(cur.tot) : "—";
-  const prevKey = key ? Object.keys(state.assetSnapshots).filter((k) => k < key).sort().pop() : null;
-  if (prevKey) { const d = cur.tot - nwTotals(prevKey).tot; $("nwDelta").innerHTML = `<span class="${d < 0 ? "neg" : d > 0 ? "pos" : ""}">${fmtSigned(d)}</span> rispetto a ${monthLabel(prevKey).toLowerCase()}`; }
+  const hasAssets = state.assets.length > 0, hasCp = state.checkpoints.length > 0;
+  $("nwEmpty").hidden = hasAssets; $("nwStart").hidden = !hasAssets || hasCp; $("nwBody").hidden = !hasCp; $("nwEdit").hidden = !hasCp;
+  if (!hasCp) return;
+  const at = nwDateFor(currentMonth), nw = netWorthAt(at);
+  const isToday = at === todayISO();
+  $("nwAsOf").textContent = isToday ? "Patrimonio oggi, aggiornato con i movimenti registrati" : `Patrimonio al ${fmtDate(at)}`;
+  $("nwTotal").textContent = nw ? fmtEur(nw.total) : "—";
+  const prev = netWorthAt(monthEnd(shiftMonth(currentMonth, -1)));
+  if (nw && prev) { const d = nw.total - prev.total; $("nwDelta").innerHTML = `<span class="${d < 0 ? "neg" : d > 0 ? "pos" : ""}">${fmtSigned(d)}</span> da fine ${monthLabel(shiftMonth(currentMonth, -1)).toLowerCase()}`; }
   else $("nwDelta").textContent = "";
-  $("nwSplit").innerHTML = cur.tot > 0 ? Object.keys(KIND_LABEL).map((k) => `<span style="width:${cur.by[k] / cur.tot * 100}%;background:${kindColor(k)}"></span>`).join("") : "";
-  $("nwLegend").innerHTML = Object.entries(KIND_LABEL).map(([k, l]) => `<span><i style="background:${kindColor(k)}"></i>${l} <strong class="num">${fmtEur(cur.by[k])}</strong>${cur.tot > 0 ? ` (${fmtPct(cur.by[k] / cur.tot * 100)})` : ""}</span>`).join("");
-  $("nwList").innerHTML = state.assets.map((a) => `<div><span>${escapeHtml(a.icon || "")} ${escapeHtml(a.name)}</span><strong class="num">${typeof cur.snap[a.id] === "number" ? fmtEur(cur.snap[a.id]) : "—"}</strong></div>`).join("");
-  const saved = state.goals.reduce((acc, g) => acc + goalStats(g).saved, 0);
-  $("nwGoals").innerHTML = saved > 0 && key ? `Di cui accantonati negli obiettivi: <strong class="num">${fmtEur(saved)}</strong> · liquidità libera: <strong class="num">${fmtEur(cur.by.liquid - saved)}</strong>` : "";
-  const keys = Object.keys(state.assetSnapshots).filter((k) => k <= currentMonth).sort().slice(-12);
-  const showChart = keys.length >= 2 && chartLibState === "ready";
+  const liq = nw && nw.l ? nw.l.value : 0, inv = nw && nw.i ? nw.i.value : 0, tot = Math.max(1, Math.abs(liq) + Math.abs(inv));
+  $("nwSplit").innerHTML = nw && (liq > 0 || inv > 0) ? [["invest", inv], ["liquid", liq]].map(([k, v]) => `<span style="width:${Math.max(0, v) / tot * 100}%;background:${kindColor(k)}"></span>`).join("") : "";
+  $("nwLegend").innerHTML = [["invest", inv], ["liquid", liq]].map(([k, v]) => `<span><i style="background:${kindColor(k)}"></i>${KIND_LABEL[k]} <strong class="num">${fmtEur(v)}</strong></span>`).join("");
+  // blocco liquidità
+  const acc = (kind, vals) => state.assets.filter((a) => a.kind === kind).map((a) => `<div><span>${escapeHtml(a.icon || "")} ${escapeHtml(a.name)}</span><span class="num">${vals && typeof vals[a.id] === "number" ? fmtEur(vals[a.id]) : "—"}</span></div>`).join("");
+  const saved = state.goals.reduce((a, g) => a + goalStats(g).saved, 0);
+  if (nw && nw.l) {
+    const l = nw.l;
+    $("nwLiq").innerHTML = `<div class="nw-bt">💧 Liquidità ${l.f.liquid ? "<span class=\"badge\">aggiornata dai movimenti</span>" : ""}</div><div class="nw-bv num">${fmtEur(l.value)}</div>
+      <div class="small muted">Saldi reali al ${fmtDate(l.cp.date)}: ${fmtEur(l.base)}${l.f.liquid || l.f.inc || l.f.exp ? ` · da allora entrate +${fmtEur(l.f.inc)}, spese −${fmtEur(l.f.exp)}${l.f.tin || l.f.tout ? `, investito ${fmtSigned(l.f.tin - l.f.tout)}` : ""}` : ""}</div>
+      ${saved > 0 ? `<div class="small" style="margin-top:4px">Accantonati negli obiettivi ${fmtEur(saved)} · <strong>liberi ${fmtEur(l.value - saved)}</strong></div>` : ""}
+      <div class="nw-acc">${acc("liquid", l.cp.liquid)}</div>`;
+  } else $("nwLiq").innerHTML = `<div class="nw-bt">💧 Liquidità</div><p class="small muted">Nessun saldo reale inserito.</p>`;
+  if (nw && nw.i) {
+    const i = nw.i;
+    $("nwInv").innerHTML = `<div class="nw-bt">📈 Investimenti ${i.f.invest ? '<span class="badge">stimato</span>' : ""}</div><div class="nw-bv num">${fmtEur(i.value)}</div>
+      <div class="small muted">Valore di mercato al ${fmtDate(i.cp.date)}: ${fmtEur(i.base)}${i.f.invest ? ` · versamenti netti da allora ${fmtSigned(i.f.invest)} (al prezzo pagato)` : ""}. Non cambia con le spese.</div>
+      <div class="nw-acc">${acc("invest", i.cp.invest)}</div>`;
+  } else $("nwInv").innerHTML = `<div class="nw-bt">📈 Investimenti</div><p class="small muted">Nessun valore di mercato inserito.</p>`;
+  const lastLiq = cpLatest("liquid", todayISO());
+  const age = lastLiq ? Math.floor((new Date(todayISO()) - new Date(lastLiq.date)) / 86400000) : null;
+  $("nwDue").hidden = !(lastLiq && age > 31);
+  if (lastLiq) $("nwDueText").textContent = `Ultimo controllo dei saldi il ${fmtDate(lastLiq.date)}, ${age} giorni fa: confrontali con banca e portafoglio (2 minuti).`;
+  // storico dei controlli e scarti
+  $("nwHist").innerHTML = state.checkpoints.slice().sort(byDateAsc).reverse().map((k) => {
+    const gap = k.liquid && typeof k.expectedLiquid === "number" ? sumVals(k.liquid) - k.expectedLiquid : null;
+    return `<div class="nw-h" data-k="${k.id}"><div><strong>${fmtDate(k.date)}</strong><br><span class="small muted">${k.liquid ? "liquidità reale " + fmtEur(sumVals(k.liquid)) : ""}${k.liquid && k.invest ? " · " : ""}${k.invest ? "investimenti " + fmtEur(sumVals(k.invest)) : ""}</span>
+      ${gap != null ? `<br><span class="small">Previsto ${fmtEur(k.expectedLiquid)} · scarto <strong class="${gap < 0 ? "neg" : gap > 0 ? "pos" : ""}">${fmtSigned(gap)}</strong>${gap < 0 ? " (spese non registrate)" : gap > 0 ? " (entrate non registrate)" : " ✓"}</span>` : ""}</div>
+      <button class="link danger" data-kdel="${k.id}">Elimina</button></div>`;
+  }).join("");
+  // andamento: fine di ogni mese dal primo controllo
+  const first = monthOf(state.checkpoints.slice().sort(byDateAsc)[0].date), months = [];
+  for (let ym = first; ym <= currentMonth && months.length < 24; ym = shiftMonth(ym, 1)) months.push(ym);
+  const pts = months.slice(-12).map((ym) => ({ ym, v: netWorthAt(nwDateFor(ym)) })).filter((x) => x.v);
+  const showChart = pts.length >= 2 && chartLibState === "ready";
   $("nwChartBox").hidden = !showChart;
-  $("nwChartNote").textContent = keys.length < 2 ? "Il grafico dell'andamento compare dal secondo mese aggiornato." : "";
+  $("nwChartNote").textContent = pts.length < 2 ? "Il grafico dell'andamento compare dalla fine del primo mese." : "";
   if (!showChart) return;
   const { ink, grid } = chartColors(), col = palette()[0];
-  const data = { labels: keys.map(shortMonth), datasets: [{ data: keys.map((k) => nwTotals(k).tot / 100), borderColor: col, backgroundColor: col + "22", fill: true, tension: .3, pointRadius: 3, pointBackgroundColor: col }] };
+  const data = { labels: pts.map((x) => shortMonth(x.ym)), datasets: [{ data: pts.map((x) => x.v.total / 100), borderColor: col, backgroundColor: col + "22", fill: true, tension: .3, pointRadius: 3, pointBackgroundColor: col }] };
   const options = { responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => " " + eurFmt.format(ctx.parsed.y) } } },
     scales: { x: { ticks: { color: ink }, grid: { display: false } }, y: { ticks: { color: ink, callback: (v) => eurFmt.format(v).replace(",00", "") }, grid: { color: grid } } } };
@@ -1612,33 +1715,78 @@ function renderNetWorth() {
 }
 let nwDraft = [];
 function openNw() {
-  const key = nwKeyFor(currentMonth), snap = (key && state.assetSnapshots[key]) || {};
-  nwDraft = state.assets.map((a) => ({ ...a, value: typeof snap[a.id] === "number" ? centsToInput(snap[a.id]) : "" }));
-  $("nwSheetTitle").textContent = `Valori di ${monthLabel(currentMonth).toLowerCase()}`;
-  $("nwSheetHint").textContent = key && key !== currentMonth ? `Precompilati con i valori di ${monthLabel(key).toLowerCase()}: cambia solo quelli diversi.` : "Scrivi il valore attuale di ogni voce (saldo del conto, valore degli ETF, contanti in tasca).";
+  const today = todayISO(), inv = investAt(today), lastLiq = cpLatest("liquid", today);
+  // campi vuoti: si scrive solo ciò che si aggiorna (un gruppo lasciato vuoto resta com'è); il valore precedente è suggerito
+  nwDraft = state.assets.map((a) => {
+    const prev = a.kind === "liquid" ? lastLiq && lastLiq.liquid : inv && inv.cp.invest;
+    return { ...a, value: "", last: prev && typeof prev[a.id] === "number" ? prev[a.id] : null };
+  });
+  // i versamenti fatti dopo l'ultimo valore di mercato vanno aggiunti a mano solo se il valore non è stato aggiornato: li mostriamo come nota
+  $("nwInvNote").textContent = inv && inv.f.invest ? `Investimenti: dall'ultimo valore di mercato hai registrato versamenti netti per ${fmtSigned(inv.f.invest)}. Se aggiorni il valore, scrivi quello attuale del conto titoli (li comprende già); se lasci vuoto resta la stima.` : "";
+  $("nwDate").value = today; $("nwDate").max = today;
+  $("nwSheetTitle").textContent = state.checkpoints.length ? "Controllo dei saldi" : "Punto di partenza";
+  $("nwSheetHint").textContent = state.checkpoints.length
+    ? "Scrivi i saldi reali di oggi (app della banca, prepagata, contanti in tasca). Il valore degli investimenti è quello del conto titoli. Lascia vuoto un gruppo se non vuoi aggiornarlo."
+    : "Scrivi i saldi reali di oggi a fine giornata. Da qui in avanti la liquidità si aggiorna da sola con le entrate e le spese che registri; i movimenti precedenti non contano.";
   $("eNw").textContent = ""; renderNwRows(); $("nwSheet").hidden = false;
 }
 function renderNwRows() {
-  $("nwRows").innerHTML = nwDraft.map((a, i) => `<div class="nw-row" data-i="${i}">
+  const row = (a, i) => `<div class="nw-row" data-i="${i}">
       <input type="text" class="icon-in" data-f="icon" value="${escapeHtml(a.icon || "")}" maxlength="4" aria-label="Icona" autocomplete="off">
       <input type="text" data-f="name" value="${escapeHtml(a.name)}" maxlength="40" placeholder="Nome della voce" aria-label="Nome della voce" autocomplete="off">
-      <input type="text" data-f="value" value="${escapeHtml(a.value)}" inputmode="decimal" placeholder="Valore €" aria-label="Valore ${escapeHtml(a.name)}" autocomplete="off">
+      <input type="text" data-f="value" value="${escapeHtml(a.value)}" inputmode="decimal" placeholder="${a.last != null ? "prima " + centsToInput(a.last) : "Valore €"}" aria-label="Valore ${escapeHtml(a.name)}" autocomplete="off">
       <button type="button" class="icon danger" data-del="${i}" aria-label="Elimina ${escapeHtml(a.name)}">✕</button>
       <select data-f="kind" aria-label="Tipo di voce">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}"${a.kind === k ? " selected" : ""}>${l}</option>`).join("")}</select>
-    </div>`).join("") || `<p class="small muted">Nessuna voce: aggiungine una.</p>`;
+    </div>`;
+  const group = (k, title) => { const rows = nwDraft.map((a, i) => [a, i]).filter(([a]) => a.kind === k); return `<div class="nw-group">${title}</div>` + (rows.map(([a, i]) => row(a, i)).join("") || `<p class="small muted">Nessuna voce.</p>`); };
+  $("nwRows").innerHTML = group("liquid", "💧 Liquidità · saldo reale") + group("invest", "📈 Investimenti · valore di mercato");
+  updateNwCheck();
+}
+/** Confronto in tempo reale tra liquidità prevista e reale. */
+function updateNwCheck() {
+  const date = $("nwDate").value, liq = nwDraft.filter((a) => a.kind === "liquid");
+  const filled = liq.filter((a) => a.value.trim() && parseNumber(a.value) != null);
+  const exp = isValidISODate(date) ? liquidityAt(date) : null;
+  if (!exp || !liq.length || filled.length !== liq.length) { $("nwCheck").innerHTML = exp ? `<span class="muted">Liquidità prevista al ${fmtDate(date)}: <strong class="num">${fmtEur(exp.value)}</strong></span>` : ""; return; }
+  const real = filled.reduce((a, x) => a + parseNumber(x.value), 0), gap = real - exp.value;
+  $("nwCheck").innerHTML = `Previsto <strong class="num">${fmtEur(exp.value)}</strong> · Reale <strong class="num">${fmtEur(real)}</strong> · Scarto <strong class="num ${gap < 0 ? "neg" : gap > 0 ? "pos" : ""}">${fmtSigned(gap)}</strong>`
+    + `<br><span class="small muted">${gap < 0 ? "Scarto negativo: spese (o commissioni) non registrate." : gap > 0 ? "Scarto positivo: entrate non registrate o spese contate due volte." : "Perfetto: hai registrato tutto."}</span>`;
 }
 function saveNw(ev) {
   ev.preventDefault();
+  const date = $("nwDate").value, err = (m) => { $("eNw").textContent = m; };
+  if (!isValidISODate(date) || date > todayISO()) return err("Scegli una data valida, non futura.");
   for (const a of nwDraft) {
-    if (!a.name.trim()) { $("eNw").textContent = "Ogni voce deve avere un nome."; return; }
-    if (a.value.trim() && parseNumber(a.value) == null) { $("eNw").textContent = `Valore non valido per "${a.name}": usa un numero come 1.234,56.`; return; }
+    if (!a.name.trim()) return err("Ogni voce deve avere un nome.");
+    if (a.value.trim() && parseNumber(a.value) == null) return err(`Valore non valido per "${a.name}": usa un numero come 1.234,56.`);
   }
+  const collect = (k) => {
+    const rows = nwDraft.filter((a) => a.kind === k), filled = rows.filter((a) => a.value.trim());
+    if (!filled.length) return null;
+    if (filled.length !== rows.length) return "partial";
+    return Object.fromEntries(rows.map((a) => [a.id, parseNumber(a.value)]));
+  };
+  const liquid = collect("liquid"), invest = collect("invest");
+  if (liquid === "partial") return err("Compila il saldo di tutti i conti della liquidità (anche 0), oppure di nessuno.");
+  if (invest === "partial") return err("Compila il valore di tutti gli investimenti, oppure di nessuno.");
+  if (!liquid && !invest && !state.checkpoints.length) return err("Inserisci almeno i saldi della liquidità per fissare il punto di partenza.");
+  const expected = liquid ? liquidityAt(date) : null;
   state.assets = nwDraft.map((a) => ({ id: a.id, name: a.name.trim(), kind: a.kind, icon: a.icon.trim() || "💰" }));
-  const snap = {};
-  nwDraft.forEach((a) => { if (a.value.trim()) snap[a.id] = parseNumber(a.value); });
-  if (Object.keys(snap).length) state.assetSnapshots[currentMonth] = snap; else delete state.assetSnapshots[currentMonth];
+  if (liquid || invest) {
+    // controllo di oggi = saldi di adesso: le spese registrate dopo contano; per un giorno passato vale "a fine giornata".
+    // Ogni controllo è una registrazione a sé (anche più d'uno nello stesso giorno): un gruppo lasciato vuoto resta quello precedente.
+    const cp = { id: "k" + uid(), date, ts: date === todayISO() ? Date.now() : null, liquid: liquid || null, invest: invest || null,
+      expectedLiquid: liquid && expected ? expected.value : null };
+    state.checkpoints = state.checkpoints.concat(cp);
+  }
   persist(); $("nwSheet").hidden = true; render();
-  toast("info", `Patrimonio di ${monthLabel(currentMonth).toLowerCase()} aggiornato.`, 2500);
+  const gap = liquid && expected ? sumVals(liquid) - expected.value : null;
+  toast("info", gap == null ? "Saldi salvati: da ora il patrimonio si aggiorna con i movimenti." : `Controllo salvato. Scarto ${fmtSigned(gap)}${gap < 0 ? ": spese non registrate." : "."}`, 4500);
+}
+async function deleteCheckpoint(id) {
+  const k = state.checkpoints.find((x) => x.id === id); if (!k) return;
+  if (!(await askConfirm(`Eliminare il controllo del ${fmtDate(k.date)}? Il patrimonio verrà ricalcolato dal controllo precedente.`, "Elimina"))) return;
+  state.checkpoints = state.checkpoints.filter((x) => x.id !== id); persist(); render();
 }
 
 /* --- Riepilogo del mese "a storie" (5 schede) --- */
@@ -1675,7 +1823,9 @@ function monthStory(ym) {
   slides.push({ g: ["#008300", "#1baf7a"], html: `<div class="kicker">Risparmio del mese</div><div class="huge">${fmtSigned(bal)}</div>
     <p>Entrate ${fmtEur(sum.income)} − spese ${fmtEur(t.spent)}${sum.income > 0 ? `, tasso di risparmio ${fmtPct(bal / sum.income * 100)}` : ""}.</p>`
     + (sum.familyIncome > 0 ? `<p>Senza gli aiuti di famiglia: <strong>${fmtSigned(own)}</strong>.</p>` : "")
-    + (days && days.past ? `<div><span class="pillbox">🟢 ${days.green} giorni su ${days.past} in budget · serie migliore ${days.best}</span></div>` : "") });
+    + (days && days.past ? `<div><span class="pillbox">🟢 ${days.green} giorni su ${days.past} in budget · serie migliore ${days.best}</span></div>` : "")
+    + (sum.invested ? `<p>📈 Investito nel mese: ${fmtSigned(sum.invested)}.</p>` : "")
+    + state.checkpoints.filter((k) => monthOf(k.date) === ym && k.liquid && typeof k.expectedLiquid === "number").map((k) => { const g = sumVals(k.liquid) - k.expectedLiquid; return `<p>🔎 Controllo del ${fmtDate(k.date)}: scarto ${fmtSigned(g)}${g < 0 ? " di spese non registrate" : ""}.</p>`; }).join("") });
   return slides;
 }
 function openStory(ym) {
@@ -1832,7 +1982,7 @@ function resetCharts() { Object.keys(charts).forEach((k) => { if (charts[k]) { c
 const sheet = { kind: "exp", editing: null, refId: null };
 function openSheet(kind = "exp", item = null) {
   sheet.kind = item ? item.kind : kind; sheet.editing = item ? item.id : null;
-  sheet.refId = item ? (item.kind === "exp" ? item.catId : item.sourceId) : null;
+  sheet.refId = item ? (item.kind === "exp" ? item.catId : item.kind === "inv" ? item.dir : item.sourceId) : null;
   sheet.manual = !!item; sheet.auto = false;
   $("fAmount").value = item ? centsToInput(item.amount) : "";
   $("fDate").value = item ? item.date : (monthOf(todayISO()) === currentMonth ? todayISO() : `${currentMonth}-01`);
@@ -1842,20 +1992,26 @@ function openSheet(kind = "exp", item = null) {
   $("sheetDelete").hidden = !item;
   renderSheet(); renderQuick();
   $("moveSheet").hidden = false;
-  setTimeout(() => $("fAmount").focus(), 60);
+  focusLater("fAmount");
+}
+/** Porta il cursore sul primo campo dopo l'apertura, ma non lo sposta se nel frattempo stai già scrivendo altrove. */
+function focusLater(id) {
+  setTimeout(() => { const a = document.activeElement; if (!a || !/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) $(id).focus(); }, 60);
 }
 function closeSheet() { $("moveSheet").hidden = true; sheet.editing = null; }
 function renderSheet() {
-  const isExp = sheet.kind === "exp";
-  $("typeExp").setAttribute("aria-pressed", String(isExp)); $("typeInc").setAttribute("aria-pressed", String(!isExp));
-  $("sheetTitle").textContent = (sheet.editing ? "Modifica " : "Nuova ") + (isExp ? "spesa" : "entrata");
-  $("submitBtn").textContent = sheet.editing ? "Salva modifiche" : isExp ? "Aggiungi spesa" : "Aggiungi entrata";
-  $("catGridLabel").textContent = isExp ? "Categoria" : "Fonte";
-  const items = isExp ? state.categories : state.incomeSources;
+  const isExp = sheet.kind === "exp", isInv = sheet.kind === "inv";
+  $("typeExp").setAttribute("aria-pressed", String(isExp)); $("typeInc").setAttribute("aria-pressed", String(sheet.kind === "inc")); $("typeInv").setAttribute("aria-pressed", String(isInv));
+  const noun = isExp ? "spesa" : isInv ? "investimento" : "entrata";
+  $("sheetTitle").textContent = (sheet.editing ? "Modifica " : isInv ? "Nuovo " : "Nuova ") + noun;
+  $("submitBtn").textContent = sheet.editing ? "Salva modifiche" : "Aggiungi " + noun;
+  $("catGridLabel").textContent = isExp ? "Categoria" : isInv ? "Tipo" : "Fonte";
+  const items = isExp ? state.categories : isInv ? TRANSFER_TYPES : state.incomeSources;
   if (!items.some((x) => x.id === sheet.refId)) sheet.refId = null;
   $("catGrid").innerHTML = items.map((x) => `<button type="button" data-ref="${x.id}" aria-pressed="${x.id === sheet.refId}">
       <span class="emo" aria-hidden="true">${escapeHtml(x.icon || "")}</span>${escapeHtml(x.name)}</button>`).join("");
   $("catSuggest").hidden = !(sheet.auto && sheet.refId);
+  $("invHint").hidden = !isInv;
 }
 
 /* --- Inserimento lampo ---
@@ -1915,12 +2071,12 @@ function renderQuick() {
 }
 function saveMove(ev) {
   ev.preventDefault();
-  const date = $("fDate").value, amount = parseAmount($("fAmount").value), refId = sheet.refId, isExp = sheet.kind === "exp";
+  const date = $("fDate").value, amount = parseAmount($("fAmount").value), refId = sheet.refId, isExp = sheet.kind === "exp", isInv = sheet.kind === "inv";
   const errs = {};
   if (!isValidISODate(date)) errs.eDate = "Inserisci una data valida.";
   if (amount == null) errs.eAmount = "Inserisci un importo numerico (es. 12,50).";
   else if (amount <= 0) errs.eAmount = "L'importo deve essere maggiore di zero.";
-  if (!refId || !(isExp ? catById(refId) : srcById(refId))) errs.eCat = isExp ? "Seleziona una categoria." : "Seleziona una fonte.";
+  if (!refId || !(isExp ? catById(refId) : isInv ? TRANSFER_TYPES.some((x) => x.id === refId) : srcById(refId))) errs.eCat = isExp ? "Seleziona una categoria." : isInv ? "Scegli versamento o disinvestimento." : "Seleziona una fonte.";
   $("eDate").textContent = errs.eDate || ""; $("eAmount").textContent = errs.eAmount || ""; $("eCat").textContent = errs.eCat || "";
   if (errs.eDate) $("fDate").setAttribute("aria-invalid", "true"); else $("fDate").removeAttribute("aria-invalid");
   if (errs.eAmount) $("fAmount").setAttribute("aria-invalid", "true"); else $("fAmount").removeAttribute("aria-invalid");
@@ -1928,20 +2084,21 @@ function saveMove(ev) {
   const ym = monthOf(date), months = [ym];
   const before = computeAlerts(computeSummary(ym));
   const v = { date, amount, desc: $("fDesc").value.trim() };
-  const list = isExp ? state.expenses : state.incomes;
+  const list = listOfKind(sheet.kind);
+  const refField = isExp ? { catId: refId } : isInv ? { dir: refId } : { sourceId: refId };
   if (sheet.editing) {
-    // la modifica può anche cambiare tipo (spesa ↔ entrata)
-    const oldList = state.expenses.some((x) => x.id === sheet.editing) ? state.expenses : state.incomes;
+    // la modifica può anche cambiare tipo (spesa, entrata, investimento)
+    const oldList = listOfKind(kindOfId(sheet.editing));
     const old = oldList.find((x) => x.id === sheet.editing);
     months.push(monthOf(old.date));
     oldList.splice(oldList.indexOf(old), 1);
-    const upd = { id: old.id, ...v, ...(isExp ? { catId: refId } : { sourceId: refId }) };
+    const upd = { id: old.id, ...v, ...refField };
     if (old.recId) upd.recId = old.recId;
     if (old.demo) upd.demo = true;
     list.push(upd);
     toast("info", "Movimento aggiornato.", 2500);
   } else {
-    list.push({ id: uid(), ...v, ...(isExp ? { catId: refId } : { sourceId: refId }) });
+    list.push({ id: uid(), ...v, ...refField, ts: Date.now() });
   }
   persist([...new Set(months)], false);
   if (ym !== currentMonth) toast("info", `Registrato in <strong>${monthLabel(ym).toLowerCase()}</strong>, il mese della data inserita.`, 5000);
@@ -1951,8 +2108,10 @@ function saveMove(ev) {
   render();
 }
 /** Elimina subito e offre "Annulla" per qualche secondo. */
+const listOfKind = (k) => (k === "exp" ? state.expenses : k === "inv" ? state.transfers : state.incomes);
+const kindOfId = (id) => (state.expenses.some((x) => x.id === id) ? "exp" : state.transfers.some((x) => x.id === id) ? "inv" : "inc");
 function deleteMove(id, kind) {
-  const list = kind === "exp" ? state.expenses : state.incomes;
+  const list = listOfKind(kind);
   const idx = list.findIndex((x) => x.id === id); if (idx < 0) return;
   const [item] = list.splice(idx, 1), ym = monthOf(item.date);
   persist([ym], false); render();
@@ -2039,7 +2198,7 @@ function openGoal(g = null, preset = null) {
   $("gDeadline").value = g && g.deadline ? g.deadline : "";
   $("gStart").value = ""; $("gStartField").hidden = !!g;
   ["eGName", "eGTarget", "eGMonthly", "eGStart"].forEach((id) => $(id).textContent = "");
-  $("goalSheet").hidden = false; setTimeout(() => $("gName").focus(), 60);
+  $("goalSheet").hidden = false; focusLater("gName");
 }
 function saveGoal(ev) {
   ev.preventDefault();
@@ -2068,7 +2227,7 @@ function openDeposit(goalId, sign) {
   $("depSubmit").textContent = sign > 0 ? "Registra versamento" : "Registra prelievo";
   $("dAmount").value = ""; $("dNote").value = ""; $("dDate").value = todayISO();
   $("eDAmount").textContent = ""; $("eDDate").textContent = "";
-  $("depSheet").hidden = false; setTimeout(() => $("dAmount").focus(), 60);
+  $("depSheet").hidden = false; focusLater("dAmount");
 }
 function saveDeposit(ev) {
   ev.preventDefault();
@@ -2100,7 +2259,7 @@ function openRec(r = null) {
   $("rDesc").value = r ? r.desc : ""; $("rStart").value = r ? r.start : currentMonth; $("rEnd").value = r && r.end ? r.end : "";
   ["eRAmount", "eRDay", "eRCat", "eRDesc", "eRStart", "eREnd"].forEach((id) => $(id).textContent = "");
   renderRecKind(r ? r.refId : null);
-  $("recSheet").hidden = false; setTimeout(() => $("rAmount").focus(), 60);
+  $("recSheet").hidden = false; focusLater("rAmount");
 }
 function renderRecKind(selected) {
   const isExp = recKind === "exp";
@@ -2162,9 +2321,14 @@ function exportCsv() {
   if (!list.length) { toast("info", "Nessun movimento da esportare in questo mese.", 3000); return; }
   const q = (s) => `"${String(s).replace(/"/g, '""')}"`, num = (c) => (c / 100).toFixed(2).replace(".", ",");
   const lines = ["Data;Tipo;Categoria o fonte;Descrizione;Importo (EUR)"];
-  for (const m of list) lines.push([fmtDate(m.date), m.kind === "exp" ? "Spesa" : "Entrata", q((m.kind === "exp" ? catById(m.catId) : srcById(m.sourceId))?.name || ""), q(m.desc || ""), num(m.kind === "exp" ? -m.amount : m.amount)].join(";"));
+  for (const m of list) {
+    if (m.kind === "inv") { lines.push([fmtDate(m.date), "Investimento", q(trType(m.dir).name), q(m.desc || ""), num(m.dir === "out" ? m.amount : -m.amount)].join(";")); continue; }
+    lines.push([fmtDate(m.date), m.kind === "exp" ? "Spesa" : "Entrata", q((m.kind === "exp" ? catById(m.catId) : srcById(m.sourceId))?.name || ""), q(m.desc || ""), num(m.kind === "exp" ? -m.amount : m.amount)].join(";"));
+  }
   const exp = list.filter((m) => m.kind === "exp").reduce((s, m) => s + m.amount, 0), inc = list.filter((m) => m.kind === "inc").reduce((s, m) => s + m.amount, 0);
   lines.push(["", "", "", q("Totale spese"), num(-exp)].join(";"), ["", "", "", q("Totale entrate"), num(inc)].join(";"), ["", "", "", q("Saldo"), num(inc - exp)].join(";"));
+  const invNet = list.filter((m) => m.kind === "inv").reduce((a, m) => a + (m.dir === "out" ? -m.amount : m.amount), 0);
+  if (list.some((m) => m.kind === "inv")) lines.push(["", "", "", q("Investito netto (non è una spesa)"), num(-invNet)].join(";"));
   offerFile(`movimenti_${currentMonth}.csv`, "﻿" + lines.join("\r\n"), "text/csv;charset=utf-8");
 }
 async function exportJson() {
@@ -2272,6 +2436,7 @@ function bindEvents() {
   $("moveSheet").addEventListener("click", (ev) => { if (ev.target.id === "moveSheet") closeSheet(); });
   $("typeExp").addEventListener("click", () => { sheet.kind = "exp"; sheet.auto = false; renderSheet(); renderQuick(); });
   $("typeInc").addEventListener("click", () => { sheet.kind = "inc"; sheet.auto = false; renderSheet(); renderQuick(); });
+  $("typeInv").addEventListener("click", () => { sheet.kind = "inv"; sheet.auto = false; renderSheet(); renderQuick(); });
   $("catGrid").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-ref]"); if (!b) return; sheet.refId = b.dataset.ref; sheet.manual = true; sheet.auto = false; $("eCat").textContent = ""; renderSheet(); });
   $("fDesc").addEventListener("input", () => {
     if (sheet.kind !== "exp" || sheet.manual) return;
@@ -2306,11 +2471,11 @@ function bindEvents() {
     b.addEventListener("mousedown", (ev) => ev.preventDefault());   // mouse: il campo non perde il fuoco
     b.addEventListener("click", () => { if (Date.now() - touchedAt > 800) act(); });
   });
-  $("sheetDelete").addEventListener("click", () => { const id = sheet.editing, kind = state.expenses.some((x) => x.id === id) ? "exp" : "inc"; closeSheet(); deleteMove(id, kind); });
+  $("sheetDelete").addEventListener("click", () => { const id = sheet.editing, kind = kindOfId(id); closeSheet(); deleteMove(id, kind); });
   $("moveBody").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;
     const tr = b.closest("tr"), id = tr.dataset.id, kind = tr.dataset.kind;
-    if (b.dataset.act === "edit") { const item = (kind === "exp" ? state.expenses : state.incomes).find((x) => x.id === id); openSheet(kind, { ...item, kind }); }
+    if (b.dataset.act === "edit") { const item = listOfKind(kind).find((x) => x.id === id); openSheet(kind, { ...item, kind }); }
     else deleteMove(id, kind);
   });
   ["fSearch", "fType", "fCatFilter", "fSort"].forEach((id) => $(id).addEventListener("input", renderMoves));
@@ -2329,11 +2494,15 @@ function bindEvents() {
   // Patrimonio
   $("nwEdit").addEventListener("click", openNw);
   $("nwPreset").addEventListener("click", () => { state.assets = PLAN_ASSETS.map(([name, kind, icon]) => ({ id: "a" + uid(), name, kind, icon })); persist(); render(); openNw(); });
+  $("nwStartBtn").addEventListener("click", openNw);
+  $("nwDueBtn").addEventListener("click", openNw);
+  $("nwDate").addEventListener("input", updateNwCheck);
+  $("nwHist").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-kdel]"); if (b) deleteCheckpoint(b.dataset.kdel); });
   $("nwClose").addEventListener("click", () => { $("nwSheet").hidden = true; });
   $("nwForm").addEventListener("submit", saveNw);
-  $("nwAdd").addEventListener("click", () => { nwDraft.push({ id: "a" + uid(), name: "", kind: "liquid", icon: "💰", value: "" }); renderNwRows(); const r = $("nwRows").lastElementChild; if (r) r.querySelector('[data-f="name"]').focus(); });
-  $("nwRows").addEventListener("input", (ev) => { const row = ev.target.closest("[data-i]"), f = ev.target.dataset.f; if (row && f) nwDraft[Number(row.dataset.i)][f] = ev.target.value; });
-  $("nwRows").addEventListener("change", (ev) => { const row = ev.target.closest("[data-i]"), f = ev.target.dataset.f; if (row && f) nwDraft[Number(row.dataset.i)][f] = ev.target.value; });
+  $("nwAdd").addEventListener("click", () => { nwDraft.push({ id: "a" + uid(), name: "", kind: "liquid", icon: "💰", value: "", last: null }); renderNwRows(); const r = $("nwRows").querySelector(`[data-i="${nwDraft.length - 1}"] [data-f="name"]`); if (r) r.focus(); });
+  $("nwRows").addEventListener("input", (ev) => { const row = ev.target.closest("[data-i]"), f = ev.target.dataset.f; if (row && f) { nwDraft[Number(row.dataset.i)][f] = ev.target.value; if (f === "value") updateNwCheck(); } });
+  $("nwRows").addEventListener("change", (ev) => { const row = ev.target.closest("[data-i]"), f = ev.target.dataset.f; if (row && f) { nwDraft[Number(row.dataset.i)][f] = ev.target.value; if (f === "kind") renderNwRows(); } });
   $("nwRows").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-del]"); if (b) { nwDraft.splice(Number(b.dataset.del), 1); renderNwRows(); } });
 
   // Obiettivi
