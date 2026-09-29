@@ -613,6 +613,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
       <p class="small muted" id="footNote" style="margin-top:12px">I dati si salvano in automatico.</p>
+      <p class="small muted" id="appVersion" style="margin-top:6px"></p>
     </section>
   </section>
 </div>
@@ -765,6 +766,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
+const APP_VERSION = "3.1.1";
 const LOCAL_KEY = "budgetMensile.v1";
 const THEME_KEY = "budgetMensile.theme";
 const TAB_KEY = "budgetMensile.tab";
@@ -891,13 +893,15 @@ function normalizeState(s) {
   if (!s.assetSnapshots || typeof s.assetSnapshots !== "object") s.assetSnapshots = {};
   if (!Array.isArray(s.transfers)) s.transfers = [];
   if (!Array.isArray(s.checkpoints)) s.checkpoints = [];
+  // v3.1: i controlli nati dalla migrazione non avevano orario e "coprivano" le spese registrate nello stesso giorno
+  s.checkpoints.forEach((k) => { if (k.ts == null && /^k\d{4}-\d{2}$/.test(k.id)) k.ts = 1; });
   // v3.0 → v3.1: i valori mensili del patrimonio diventano "saldi reali" datati
   if (!s.checkpoints.length && Object.keys(s.assetSnapshots).length) {
     const kindOf = (id) => (s.assets.find((a) => a.id === id) || {}).kind;
     const nowYm = monthOf(todayISO());
     for (const [ym, snap] of Object.entries(s.assetSnapshots).sort()) {
       const pick = (k) => { const o = {}; for (const [id, v] of Object.entries(snap)) if (kindOf(id) === k && typeof v === "number") o[id] = v; return Object.keys(o).length ? o : null; };
-      s.checkpoints.push({ id: "k" + ym, date: ym >= nowYm ? todayISO() : `${ym}-${pad(daysInMonth(ym))}`, liquid: pick("liquid"), invest: pick("invest"), expectedLiquid: null });
+      s.checkpoints.push({ id: "k" + ym, date: ym >= nowYm ? todayISO() : `${ym}-${pad(daysInMonth(ym))}`, ts: 1, liquid: pick("liquid"), invest: pick("invest"), expectedLiquid: null });
     }
     s.assetSnapshots = {};
   }
@@ -2101,6 +2105,11 @@ function saveMove(ev) {
     list.push({ id: uid(), ...v, ...refField, ts: Date.now() });
   }
   persist([...new Set(months)], false);
+  if (!sheet.editing) {
+    const saved = listOfKind(sheet.kind)[listOfKind(sheet.kind).length - 1], cp = cpLatest("liquid", todayISO());
+    if (cp && saved && saved.date <= todayISO() && !(saved.date > cp.date || (saved.date === cp.date && cp.ts && saved.ts > cp.ts)))
+      toast("info", `Non cambia la liquidità: la data è precedente al controllo saldi del ${fmtDate(cp.date)}, quindi è già compresa nei saldi reali.`, 6000);
+  }
   if (ym !== currentMonth) toast("info", `Registrato in <strong>${monthLabel(ym).toLowerCase()}</strong>, il mese della data inserita.`, 5000);
   if (isExp) notifyNewAlerts(before, computeAlerts(computeSummary(ym)));
   closeSheet();
@@ -2339,6 +2348,7 @@ async function exportJson() {
 const BACKUP_KEY = "budgetMensile.lastBackup", WELCOME_KEY = "budgetMensile.welcomeDone";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 function renderNotices() {
+  $("appVersion").textContent = "Versione " + APP_VERSION;
   const standalone = !cloud.available;
   $("welcome").hidden = !standalone || hasUserData(state) || !!lsGet(WELCOME_KEY);
   const last = lsGet(BACKUP_KEY);
