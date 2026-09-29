@@ -766,7 +766,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "3.1.1";
+const APP_VERSION = "3.1.2";
 const LOCAL_KEY = "budgetMensile.v1";
 const THEME_KEY = "budgetMensile.theme";
 const TAB_KEY = "budgetMensile.tab";
@@ -2099,6 +2099,9 @@ function saveMove(ev) {
     const upd = { id: old.id, ...v, ...refField };
     if (old.recId) upd.recId = old.recId;
     if (old.demo) upd.demo = true;
+    // v3.1.2: l'istante di registrazione non cambia con la modifica, altrimenti un movimento
+    // dello stesso giorno di un controllo saldi uscirebbe dal calcolo della liquidità
+    if (old.ts != null) upd.ts = old.ts;
     list.push(upd);
     toast("info", "Movimento aggiornato.", 2500);
   } else {
