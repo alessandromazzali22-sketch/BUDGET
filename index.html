@@ -353,6 +353,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* Impostazioni */
 .set-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 9rem auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .src-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.src-row select { max-width: 11.5rem; min-width: 0; }
 .src-row label.chk { display: flex; gap: 6px; align-items: center; margin: 0; font-size: .85rem; white-space: nowrap; min-height: 44px; }
 @media (max-width: 640px) { .set-row { grid-template-columns: 2.75rem minmax(0, 1fr) 6.5rem auto; gap: 6px; } .set-row button.link { padding: 6px 4px; } }
 .rec-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -546,6 +547,11 @@ tr.total td { font-weight: 650; border-bottom: none; }
 
   <!-- =========================== SCHEDA: ANALISI =========================== -->
   <section class="stack" id="panel-analisi" role="tabpanel" aria-labelledby="tab-analisi" hidden>
+    <section class="card" id="autCard">
+      <div class="card-head"><h2>Autonomia</h2><span class="small muted" id="autRange"></span></div>
+      <div id="autBody"></div>
+      <p class="small muted" style="margin-top:10px">Quanta parte delle spese, al netto dei rimborsi, è coperta dalle tue entrate. Ricorrente: solo i redditi fissi, come lo stipendio. Propria: anche le entrate occasionali. Il resto arriva dagli aiuti o dai risparmi. Il tipo di ogni fonte si imposta in Impostazioni.</p>
+    </section>
     <section class="card">
       <div class="card-head"><h2>Ultimi 6 mesi</h2><span class="small muted" id="trendRange"></span></div>
       <div class="chart-box tall" id="trendBox"><canvas id="trend" role="img" aria-label="Entrate e spese degli ultimi sei mesi"></canvas></div>
@@ -793,7 +799,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "4.0.0";
+const APP_VERSION = "4.1.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -979,6 +985,8 @@ function validateState(s) {
 }
 /** Porta un dato letto (mai modificato) allo schema corrente. Lancia un errore se non è utilizzabile. */
 /** Natura di una fonte: esterna (aiuti), propria ricorrente o propria occasionale. */
+const NATURES = [["propria_ricorrente", "Reddito ricorrente"], ["propria_occasionale", "Reddito occasionale"], ["esterna", "Aiuto esterno"]];
+const natureOf = (src) => (!src ? "propria_occasionale" : src.nature || natureFor(src.name, src.family));
 function natureFor(name, family) { return family ? "esterna" : /compenso|stipendio/i.test(name || "") ? "propria_ricorrente" : "propria_occasionale"; }
 /** Schema 3 → 4: solo struttura, nessun importo cambia (lo verifica snapshotOf). */
 function migrate3to4(s) {
@@ -1994,7 +2002,42 @@ function maybeAutoStory() {
 }
 
 /* --- Scheda Analisi --- */
+/** Autonomia sugli ultimi 12 mesi completi (il mese in corso è escluso perché parziale). */
+function autonomyStats(endYm = shiftMonth(monthOf(todayISO()), -1), span = 12) {
+  const first = [...state.expenses, ...state.incomes].reduce((m, e) => (!m || e.date < m ? e.date : m), null);
+  if (!first) return null;
+  const firstYm = monthOf(first), yms = [];
+  for (let i = span - 1; i >= 0; i--) { const ym = shiftMonth(endYm, -i); if (ym >= firstYm) yms.push(ym); }
+  if (!yms.length) return null;
+  const per = Object.fromEntries(yms.map((ym) => [ym, { spent: 0, rec: 0, occ: 0, ext: 0 }]));
+  for (const e of state.expenses) { const p = per[monthOf(e.date)]; if (p) p.spent += e.amount; }
+  for (const e of state.refunds || []) { const p = per[monthOf(e.date)]; if (p) p.spent -= e.amount; }
+  for (const e of state.incomes) {
+    const p = per[monthOf(e.date)]; if (!p) continue;
+    const n = natureOf(srcById(e.sourceId)); if (n === "esterna") p.ext += e.amount; else if (n === "propria_ricorrente") p.rec += e.amount; else p.occ += e.amount;
+  }
+  const t = Object.values(per).reduce((a, p) => ({ spent: a.spent + p.spent, rec: a.rec + p.rec, occ: a.occ + p.occ, ext: a.ext + p.ext }), { spent: 0, rec: 0, occ: 0, ext: 0 });
+  const pct = (x) => (t.spent > 0 ? (x / t.spent) * 100 : null);
+  return { yms, months: yms.length, ...t, recPct: pct(t.rec), ownPct: pct(t.rec + t.occ), extPct: pct(t.ext),
+    gapPerMonth: Math.round((t.rec + t.occ - t.spent) / yms.length),
+    autonomousMonths: Object.values(per).filter((p) => p.spent > 0 && p.rec + p.occ >= p.spent).length };
+}
+function renderAutonomy() {
+  const a = autonomyStats();
+  if (!a || !(a.spent > 0)) { $("autRange").textContent = ""; $("autBody").innerHTML = `<div class="empty">Servono almeno un mese completo di spese ed entrate.</div>`; return; }
+  $("autRange").textContent = `${monthLabel(a.yms[0])} – ${monthLabel(a.yms[a.yms.length - 1])}${a.months < 12 ? ` (${a.months} mesi)` : ""}`;
+  const line = (label, p, note) => `<div style="margin:10px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px"><span>${label}</span><strong class="num">${p == null ? "—" : fmtPct(p)}</strong></div>
+      ${barHtml(p, "ok", label, p != null && p >= 100 ? "" : "warn")}<div class="small muted">${note}</div></div>`;
+  $("autBody").innerHTML =
+    line("Copertura ricorrente", a.recPct, `${fmtEur(a.rec)} di redditi fissi su ${fmtEur(a.spent)} di spese nette`) +
+    line("Copertura propria", a.ownPct, `aggiunge ${fmtEur(a.occ)} di entrate occasionali`) +
+    `<div class="small" style="margin-top:6px">Aiuti ricevuti: <strong class="num">${fmtEur(a.ext)}</strong>${a.extPct == null ? "" : ` (${fmtPct(a.extPct)} delle spese)`}</div>
+     <div class="small">Saldo senza aiuti: <strong class="num ${a.gapPerMonth < 0 ? "neg" : "pos"}">${fmtSigned(a.gapPerMonth)}</strong> al mese in media</div>
+     <div class="small">Mesi in cui le tue entrate hanno coperto le spese: <strong class="num">${a.autonomousMonths} su ${a.months}</strong></div>`;
+}
 function renderAnalysis() {
+  renderAutonomy();
   const months = Array.from({ length: 6 }, (_, i) => shiftMonth(currentMonth, i - 5));
   const rows = months.map((ym) => { const s = computeSummary(ym); return { ym, income: s.income, spent: s.totalSpent, budget: s.total.budget }; });
   $("trendRange").textContent = `${monthLabel(months[0])} – ${monthLabel(months[5])}`;
@@ -2040,7 +2083,7 @@ function renderSettings(sum) {
   if (!$("srcList").contains(active)) {
     $("srcList").innerHTML = state.incomeSources.map((s) => `<div class="src-row">
       <input type="text" value="${escapeHtml(s.name)}" id="sn-${s.id}" data-src="${s.id}" data-field="name" maxlength="40" aria-label="Nome fonte ${escapeHtml(s.name)}" autocomplete="off">
-      <label class="chk"><input type="checkbox" id="sf-${s.id}" data-src="${s.id}" data-field="family" ${s.family ? "checked" : ""}> Aiuto</label>
+      <select id="sf-${s.id}" data-src="${s.id}" data-field="nature" aria-label="Tipo della fonte ${escapeHtml(s.name)}">${NATURES.map(([v, l]) => `<option value="${v}"${natureOf(s) === v ? " selected" : ""}>${l}</option>`).join("")}</select>
       <button class="link danger" data-src="${s.id}" data-act="delsrc" aria-label="Elimina fonte ${escapeHtml(s.name)}">Elimina</button>
     </div>`).join("");
   }
@@ -2233,7 +2276,7 @@ function saveMove(ev) {
   if (sheet.editing) {
     // la modifica può anche cambiare tipo (spesa, entrata, investimento)
     const oldList = listOfKind(kindOfId(sheet.editing));
-    const old = oldList.find((x) => x.id === sheet.editing);
+    const old = oldList.find((x) => x.id === sheet.editing), before = { ...old };
     months.push(monthOf(old.date));
     oldList.splice(oldList.indexOf(old), 1);
     const upd = { id: old.id, ...v, ...refField };
@@ -2245,7 +2288,11 @@ function saveMove(ev) {
     // v4: anche sottocategoria e origine del record restano quelle originali
     for (const k of ["tag", "origin", "fromIncome"]) if (old[k] != null) upd[k] = old[k];
     list.push(upd);
-    toast("info", "Movimento aggiornato.", 2500);
+    const undoMonths = [...new Set([monthOf(before.date), monthOf(upd.date)])];
+    toast("info", "Movimento aggiornato.", 8000, { label: "Annulla", fn: () => {
+      const i = list.indexOf(upd); if (i < 0) return;
+      list.splice(i, 1); oldList.push(before); persist(undoMonths, false); render(); toast("info", "Modifica annullata.", 2500);
+    } });
   } else {
     list.push({ id: uid(), ...v, ...refField, ts: Date.now() });
   }
@@ -2827,7 +2874,7 @@ function bindEvents() {
   $("srcList").addEventListener("change", (ev) => {
     const el = ev.target; if (!el.dataset.src) return;
     if (el.dataset.field === "name") renameItem(state.incomeSources, el.dataset.src, el.value, el, "fonte");
-    if (el.dataset.field === "family") { srcById(el.dataset.src).family = el.checked; persist(); }
+    if (el.dataset.field === "nature") { const x = srcById(el.dataset.src); x.nature = el.value; x.family = el.value === "esterna"; persist(); render(); }
   });
   $("srcList").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-act='delsrc']"); if (b) deleteSource(b.dataset.src); });
   $("addSrcForm").addEventListener("submit", (ev) => { ev.preventDefault(); addSource($("newSrc").value); });
