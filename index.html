@@ -21,7 +21,7 @@
   --page: #f7f7f4; --surface: #fdfdfb; --surface-2: #f0efea;
   --text: #121211; --text-2: #4f4e4a; --muted: #6c6a64;
   --line: #e2e0d8; --border: rgba(18, 18, 17, 0.12);
-  --accent: #2a78d6; --accent-ink: #ffffff; --accent-soft: #e3eefb;
+  --accent: #256dc4; --accent-ink: #ffffff; --accent-soft: #e3eefb;
   --track: #e8e6df; --ok: #2a78d6;
   --income: #1baf7a; --income-ink: #0b6b49;
   --warn: #fab219; --warn-bg: #fff6df; --warn-ink: #6b4a00;
@@ -37,7 +37,7 @@
     --page: #0f0f0e; --surface: #1a1a19; --surface-2: #252523;
     --text: #f7f7f4; --text-2: #c3c2b7; --muted: #a3a198;
     --line: #2e2e2b; --border: rgba(255, 255, 255, 0.12);
-    --accent: #3987e5; --accent-soft: #1d2a3b; --track: #2e2e2b; --ok: #3987e5;
+    --accent: #3987e5; --accent-ink: #10151c; --accent-soft: #1d2a3b; --track: #2e2e2b; --ok: #3987e5;
     --income: #199e70; --income-ink: #52d3a2;
     --warn-bg: #3a2e10; --warn-ink: #fcd27a; --crit-bg: #3d1b1b; --crit-ink: #f4a3a3;
     --shadow: none; --overlay: rgba(0, 0, 0, 0.6);
@@ -48,7 +48,7 @@
   --page: #0f0f0e; --surface: #1a1a19; --surface-2: #252523;
   --text: #f7f7f4; --text-2: #c3c2b7; --muted: #a3a198;
   --line: #2e2e2b; --border: rgba(255, 255, 255, 0.12);
-  --accent: #3987e5; --accent-soft: #1d2a3b; --track: #2e2e2b; --ok: #3987e5;
+  --accent: #3987e5; --accent-ink: #10151c; --accent-soft: #1d2a3b; --track: #2e2e2b; --ok: #3987e5;
   --income: #199e70; --income-ink: #52d3a2;
   --warn-bg: #3a2e10; --warn-ink: #fcd27a; --crit-bg: #3d1b1b; --crit-ink: #f4a3a3;
   --shadow: none; --overlay: rgba(0, 0, 0, 0.6);
@@ -476,7 +476,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 
     <section class="card" aria-labelledby="sumTitle">
       <div class="card-head"><h2 id="sumTitle">Riepilogo per categoria</h2></div>
-      <div class="table-scroll">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella dei budget per categoria">
         <table class="summary">
           <thead><tr><th>Categoria</th><th class="r">Budget</th><th class="r">Speso</th><th class="r">Residuo</th><th class="r">% utilizzo</th><th style="width:22%">Avanzamento</th></tr></thead>
           <tbody id="summaryBody"></tbody>
@@ -499,7 +499,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
         <select id="fSort" aria-label="Ordina"><option value="date-desc">Più recenti</option><option value="date-asc">Meno recenti</option><option value="amt-desc">Importo più alto</option><option value="amt-asc">Importo più basso</option></select>
       </div>
       <div class="small muted" id="moveTotals" style="margin-bottom:6px"></div>
-      <div class="table-scroll">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella dei movimenti">
         <table class="moves">
           <thead><tr><th>Data</th><th>Categoria / fonte</th><th>Descrizione</th><th class="r">Importo</th><th class="r">Azioni</th></tr></thead>
           <tbody id="moveBody"></tbody>
@@ -557,11 +557,11 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <div class="card-head"><h2>Ultimi 6 mesi</h2><span class="small muted" id="trendRange"></span></div>
       <div class="chart-box tall" id="trendBox"><canvas id="trend" role="img" aria-label="Entrate e spese degli ultimi sei mesi"></canvas></div>
       <div class="empty" id="trendFail" hidden>Grafico non disponibile senza connessione. I valori sono nella tabella qui sotto.</div>
-      <div class="table-scroll" style="margin-top:10px"><table class="compare"><thead><tr><th>Mese</th><th class="r">Entrate</th><th class="r">Spese</th><th class="r">Budget</th><th class="r">Saldo</th></tr></thead><tbody id="trendBody"></tbody></table></div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella degli ultimi sei mesi" style="margin-top:10px"><table class="compare"><thead><tr><th>Mese</th><th class="r">Entrate</th><th class="r">Spese</th><th class="r">Budget</th><th class="r">Saldo</th></tr></thead><tbody id="trendBody"></tbody></table></div>
     </section>
     <section class="card">
       <div class="card-head"><h2>Confronto per categoria</h2><span class="small muted" id="cmpLabel"></span></div>
-      <div class="table-scroll">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella del confronto per categoria">
         <table class="compare">
           <thead><tr><th>Categoria</th><th class="r">Questo mese</th><th class="r">Mese precedente</th><th class="r">Media 3 mesi prima</th><th class="r">Differenza sulla media</th></tr></thead>
           <tbody id="cmpBody"></tbody>
@@ -800,7 +800,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "4.2.0";
+const APP_VERSION = "4.3.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
