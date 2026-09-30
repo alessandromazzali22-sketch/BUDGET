@@ -428,6 +428,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
           <div class="small" id="todayExplain"></div>
           <div class="bar big" id="kpiBar" role="progressbar" aria-label="Utilizzo del budget totale" aria-valuemin="0" aria-valuemax="100"><span style="width:0%"></span></div>
           <div class="small muted" id="kpiPct" style="margin-top:4px"></div>
+          <div class="small" id="forecastLine" hidden style="margin-top:8px"></div>
           <div class="week" id="weekCard" hidden>
             <div class="week-head"><span class="emo" id="weekIcon"></span><span id="weekTitle"></span></div>
             <div class="week-val"><strong id="weekLeft"></strong> <span class="muted small" id="weekOf"></span></div>
@@ -799,7 +800,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "4.1.0";
+const APP_VERSION = "4.2.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -1442,6 +1443,28 @@ function computeToday(sum, ym) {
   const available = sum.total.left - committed;
   return { perDay: available > 0 ? Math.floor(available / daysLeft) : 0, available, committed, daysLeft, upcoming };
 }
+/** Liquidità prevista a fine mese (solo mese in corso). Ipotesi prudente: il budget residuo viene speso tutto;
+    le spese ricorrenti in arrivo sono comprese nel budget, le entrate ricorrenti in arrivo si aggiungono. */
+function liquidityForecast() {
+  const t = todayISO(), ym = monthOf(t), l = liquidityAt(t);
+  if (!l) return null;
+  const sum = computeSummary(ym), up = upcomingRecurring(ym);
+  const recInc = up.filter((r) => r.type === "inc").reduce((a, r) => a + r.amount, 0);
+  const recExp = up.filter((r) => r.type === "exp").reduce((a, r) => a + r.amount, 0);
+  const hasBudget = sum.total.budget > 0;
+  const budgetLeft = hasBudget ? Math.max(0, sum.total.left - recExp) : 0;   // spesa libera ancora possibile
+  const value = l.value + recInc - recExp - budgetLeft;
+  const saved = state.goals.reduce((a, g) => a + goalStats(g).saved, 0);
+  return { value, free: value - saved, saved, now: l.value, recInc, recExp, budgetLeft, hasBudget, ym };
+}
+function forecastHtml(f) {
+  const parts = [`oggi ${fmtEur(f.now)}`];
+  if (f.recInc) parts.push(`+${fmtEur(f.recInc)} entrate in arrivo`);
+  if (f.recExp) parts.push(`−${fmtEur(f.recExp)} spese ricorrenti`);
+  if (f.hasBudget) parts.push(`−${fmtEur(f.budgetLeft)} di budget ancora da spendere`);
+  return `Liquidità prevista a fine mese: <strong class="num ${f.value < 0 ? "neg" : ""}">${fmtEur(f.value)}</strong>${f.saved > 0 ? ` · liberi <strong class="num ${f.free < 0 ? "neg" : ""}">${fmtEur(f.free)}</strong>` : ""}
+    <br><span class="muted">${parts.join(", ")}${f.hasBudget ? "" : " (nessun budget impostato: contano solo i ricorrenti)"}.</span>`;
+}
 function goalStats(g) {
   const saved = g.deposits.reduce((s, d) => s + d.amount, 0);
   const left = Math.max(g.target - saved, 0), pct = g.target > 0 ? Math.min(saved / g.target * 100, 100) : 0;
@@ -1547,6 +1570,8 @@ function renderMonth(sum) {
   $("kpiBalanceSub").textContent = sum.familyIncome > 0 ? `senza aiuti ${fmtSigned(sum.ownIncome - t.spent)}` : "entrate − spese";
 
   const td = computeToday(sum, currentMonth);
+  const fc = currentMonth === monthOf(todayISO()) ? liquidityForecast() : null;
+  $("forecastLine").hidden = !fc; if (fc) $("forecastLine").innerHTML = forecastHtml(fc);
   const bar = $("kpiBar");
   bar.className = "bar big " + barClass(t.level);
   bar.setAttribute("aria-valuenow", t.pct == null ? 0 : Math.round(t.pct));
@@ -1830,6 +1855,7 @@ function renderNetWorth() {
     $("nwLiq").innerHTML = `<div class="nw-bt">💧 Liquidità ${l.f.liquid ? "<span class=\"badge\">aggiornata dai movimenti</span>" : ""}</div><div class="nw-bv num">${fmtEur(l.value)}</div>
       <div class="small muted">Saldi reali al ${fmtDate(l.cp.date)}: ${fmtEur(l.base)}${l.f.liquid || l.f.inc || l.f.exp ? ` · da allora entrate +${fmtEur(l.f.inc)}, spese −${fmtEur(l.f.exp)}${l.f.tin || l.f.tout ? `, investito ${fmtSigned(l.f.tin - l.f.tout)}` : ""}` : ""}</div>
       ${saved > 0 ? `<div class="small" style="margin-top:4px">Accantonati negli obiettivi ${fmtEur(saved)} · <strong>liberi ${fmtEur(l.value - saved)}</strong></div>` : ""}
+      ${isToday && currentMonth === monthOf(todayISO()) && liquidityForecast() ? `<div class="small" style="margin-top:6px">${forecastHtml(liquidityForecast())}</div>` : ""}
       <div class="nw-acc">${acc("liquid", l.cp.liquid)}</div>`;
   } else $("nwLiq").innerHTML = `<div class="nw-bt">💧 Liquidità</div><p class="small muted">Nessun saldo reale inserito.</p>`;
   if (nw && nw.i) {
