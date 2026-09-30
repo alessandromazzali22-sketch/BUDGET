@@ -391,9 +391,9 @@ tr.total td { font-weight: 650; border-bottom: none; }
     <button role="tab" id="tab-impostazioni" data-tab="impostazioni" aria-selected="false"><span class="ti" aria-hidden="true">⚙</span>Impostazioni</button>
   </nav>
 
-  <div id="storageWarning" class="alert info" role="status" hidden style="margin-bottom:12px">
-    <span class="ic" aria-hidden="true">ℹ️</span>
-    <div>Salvataggio non disponibile in questa finestra: i dati andranno persi alla chiusura. Usa "Scarica backup" in Impostazioni.</div>
+  <div id="storageWarning" class="alert over" role="alert" hidden style="margin-bottom:12px">
+    <span class="ic" aria-hidden="true">⚠️</span>
+    <div><strong>Salvataggio non riuscito</strong> (memoria piena o non disponibile): le ultime modifiche andranno perse alla chiusura. Salva subito un backup cifrato da Impostazioni → Dati.</div>
   </div>
 
   <div id="dataLock" class="alert over" role="alert" hidden style="margin-bottom:12px">
@@ -800,7 +800,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "4.3.0";
+const APP_VERSION = "4.4.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -852,8 +852,8 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 function parseNumber(s) {
   s = String(s || "").trim().replace(/\s|€/g, "");
   if (!s) return null;
-  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
-  else if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, "");
+  if (s.includes(",")) { if (s.includes(".") && !/^\d{1,3}(\.\d{3})+,/.test(s)) return null; s = s.replace(/\./g, "").replace(",", "."); }
+  else if ((s.match(/\./g) || []).length > 1) { if (!/^\d{1,3}(\.\d{3})+$/.test(s)) return null; s = s.replace(/\./g, ""); }
   else if (/^\d{1,3}\.\d{3}$/.test(s)) s = s.replace(".", "");
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
   return Math.round(parseFloat(s) * 100);
@@ -1067,7 +1067,17 @@ function loadLocal() {
 }
 function saveLocal() {
   if (dataLock) return false;   // sola lettura: i dati originali non si sovrascrivono
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); return true; } catch (e) { return false; }
+  const data = JSON.stringify(state);
+  try { localStorage.setItem(LOCAL_KEY, data); return true; } catch (e) { /* spazio esaurito o memoria non disponibile */ }
+  // si liberano le copie di sicurezza superate (quella dello schema attuale e la copia di emergenza restano) e si riprova una volta
+  let freed = false;
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (/\.(pre-schema\d+|before-restore)$/.test(k) && k.startsWith(LOCAL_KEY + ".") && k !== `${LOCAL_KEY}.pre-schema${SCHEMA_VERSION}`) { localStorage.removeItem(k); freed = true; }
+    }
+    if (freed) { localStorage.setItem(LOCAL_KEY, data); return true; }
+  } catch (e) { /* ancora pieno */ }
+  return false;
 }
 
 let state = defaultState();   // i dati salvati si caricano all'avvio (sezione 12), quando tutte le funzioni di calcolo esistono
@@ -1189,6 +1199,7 @@ const cloud = { available: !!(window.claude && typeof window.claude.use === "fun
 
 /** Registra le modifiche: confronta lo stato con l'ultima vista e mette in coda solo le voci cambiate. */
 function persist() {
+  if (!cloud.available) { $("storageWarning").hidden = saveLocal(); return; }   // versione iPhone: solo salvataggio locale
   const proj = project(state);
   const t = sync.clock = Math.max(Date.now(), sync.clock + 1);
   let n = 0;
@@ -1807,8 +1818,10 @@ const kindColor = (k) => (k === "invest" ? palette()[6] : palette()[2]);
 const sumVals = (o) => Object.values(o || {}).reduce((a, v) => a + (typeof v === "number" ? v : 0), 0);
 const byDateAsc = (a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0);
 /** Ultimo controllo che contiene quel gruppo, fino alla data (esclusa una data specifica, per ricalcolare il "previsto"). */
+const cpRank = (k) => (k.ts == null ? Number.MAX_SAFE_INTEGER : k.ts);   // "a fine giornata" chiude la giornata
 function cpLatest(group, atDate, excludeDate = null) {
-  return state.checkpoints.filter((k) => k[group] && k.date <= atDate && k.date !== excludeDate).sort(byDateAsc).pop() || null;
+  return state.checkpoints.filter((k) => k[group] && k.date <= atDate && k.date !== excludeDate)
+    .sort((a, b) => a.date.localeCompare(b.date) || cpRank(a) - cpRank(b)).pop() || null;
 }
 /** Movimenti successivi al controllo (data > from, oppure stesso giorno ma registrati dopo il controllo) e fino a "to". */
 function flowsBetween(from, to, fromTs = null) {
@@ -2289,6 +2302,7 @@ function saveMove(ev) {
   if (!isValidISODate(date)) errs.eDate = "Inserisci una data valida.";
   if (amount == null) errs.eAmount = "Inserisci un importo numerico (es. 12,50).";
   else if (amount <= 0) errs.eAmount = "L'importo deve essere maggiore di zero.";
+  else if (amount > 100000000) errs.eAmount = "Importo troppo alto: controlla le cifre (massimo 1.000.000 €).";
   if (!refId || !(isCat ? catById(refId) : isInv ? TRANSFER_TYPES.some((x) => x.id === refId) : srcById(refId))) errs.eCat = isCat ? "Seleziona una categoria." : isInv ? "Scegli versamento o disinvestimento." : "Seleziona una fonte.";
   $("eDate").textContent = errs.eDate || ""; $("eAmount").textContent = errs.eAmount || ""; $("eCat").textContent = errs.eCat || "";
   if (errs.eDate) $("fDate").setAttribute("aria-invalid", "true"); else $("fDate").removeAttribute("aria-invalid");
@@ -2943,8 +2957,12 @@ function bindEvents() {
   const syncSheet = () => document.body.classList.toggle("sheet-open", sheetIds.some((id) => !$(id).hidden));
   sheetIds.forEach((id) => new MutationObserver(syncSheet).observe($(id), { attributes: true, attributeFilter: ["hidden"] }));
   // Quando la pagina torna in primo piano (anche il giorno dopo) registra i ricorrenti arrivati
+  let lastSeenMonth = monthOf(todayISO());
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
+    const nowYm = monthOf(todayISO());
+    if (nowYm !== lastSeenMonth && currentMonth === lastSeenMonth) currentMonth = nowYm;
+    lastSeenMonth = nowYm;
     if (cloud.enabled && cloud.coll) refreshNow().then(() => { if (cloud.ready) { materializeRecurring(); render(); } });
     else if (!cloud.enabled) { materializeRecurring(); render(); }
   });
