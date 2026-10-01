@@ -454,6 +454,23 @@ header.top { display: block; margin: 6px 0 16px; }
 .type-more { display: flex; gap: 8px; align-items: center; margin: -4px 0 12px; font-size: 13px; color: var(--text-2); }
 .type-more button { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text-2); font-size: 13px; font-weight: 500; }
 .type-more button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* v5.1 · pannello di inserimento compatto */
+#moveSheet .sheet-card { padding-bottom: 0; }
+#moveSheet .field { margin-bottom: 10px; }
+#moveSheet .quick { margin-bottom: 8px; }
+#moveSheet .amount-input { min-height: 56px; background: var(--surface-2); }
+.sheet-actions { position: sticky; bottom: 0; z-index: 2; margin: 4px -16px 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  #moveSheet .cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  #moveSheet .cat-grid button { min-height: 60px; padding: 8px 4px; font-size: 12px; gap: 2px; }
+  #moveSheet .cat-grid button { overflow-wrap: normal; word-break: normal; hyphens: auto; -webkit-hyphens: auto; }
+}
+/* spese ed entrate in arrivo: una riga per voce */
+.upcoming .up-title { display: block; border-top: none; padding: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .3px; }
+.upcoming li.up { display: grid; grid-template-columns: minmax(3.6em, max-content) minmax(0, 1fr) auto; gap: 10px; align-items: baseline; border-top: 1px solid var(--line); }
+.up-d { color: var(--text-2); white-space: nowrap; }
+.up-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -549,7 +566,7 @@ header.top { display: block; margin: 6px 0 16px; }
         <h2>Movimenti del mese</h2>
         <div class="btn-row"><button id="addFromList" class="primary" hidden>+ Nuovo movimento</button><button id="exportCsv" class="link-btn">Esporta CSV</button></div>
       </div>
-      <div class="filters">
+      <div class="filters" id="moveFilters">
         <input class="search" type="search" id="fSearch" placeholder="Cerca per descrizione, categoria o fonte" aria-label="Cerca" autocomplete="off">
         <select id="fType" aria-label="Tipo"><option value="all">Tutti</option><option value="exp">Solo spese</option><option value="inc">Solo entrate</option><option value="inv">Solo investimenti</option><option value="ref">Solo rimborsi</option></select>
         <select id="fCatFilter" aria-label="Categoria o fonte"></select>
@@ -558,7 +575,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <div class="small muted" id="moveTotals" style="margin-bottom:6px"></div>
       <div class="mv-list" id="moveBody"></div>
       <div class="empty" id="moveEmpty" hidden>Nessun movimento corrisponde. Aggiungine uno con il pulsante +.</div>
-      <p class="small muted" style="margin-top:10px">Tocca un movimento per modificarlo o eliminarlo.</p>
+      <p class="small muted" id="moveTip" style="margin-top:10px">Tocca un movimento per modificarlo o eliminarlo.</p>
     </section>
   </section>
 
@@ -752,7 +769,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <div class="field">
         <label for="fAmount">Importo (€)</label>
         <div class="amount-row"><input type="text" id="fAmount" class="amount-input" inputmode="decimal" enterkeyhint="done" placeholder="0,00" autocomplete="off" required><div class="calc-keys"><button type="button" class="calc-key" data-for="fAmount" data-op="+" aria-label="Aggiungi un importo">+</button><button type="button" class="calc-key" data-for="fAmount" data-op="-" aria-label="Sottrai un importo">−</button></div></div>
-        <div class="hint">Per sommare più scontrini usa i tasti + e −: ad esempio 12,50 + 8.</div>
+        <div class="hint" id="amountHint">Per sommare più scontrini usa i tasti + e −: ad esempio 12,50 + 8.</div>
         <div class="err" id="eAmount"></div>
       </div>
       <div class="field">
@@ -771,7 +788,7 @@ header.top { display: block; margin: 6px 0 16px; }
         <input type="date" id="fDate" required>
         <div class="err" id="eDate"></div>
       </div>
-      <div class="btn-row">
+      <div class="btn-row sheet-actions">
         <button type="submit" class="primary" id="submitBtn" style="flex:1">Aggiungi spesa</button>
         <button type="button" class="danger" id="sheetDelete" hidden>Elimina</button>
       </div>
@@ -891,7 +908,7 @@ header.top { display: block; margin: 6px 0 16px; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "5.0.1";
+const APP_VERSION = "5.1.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -1714,7 +1731,9 @@ function renderMonth(sum) {
   renderCalendar(sum);
   const up = td ? td.upcoming : [];
   $("upcomingList").hidden = up.length === 0;
-  $("upcomingList").innerHTML = up.map((r) => `<li><span>${fmtDate(r.date)} · ${escapeHtml(r.desc || "Ricorrente")} <span class="badge${r.type === "inc" ? " in" : ""}">${r.type === "inc" ? "entrata in arrivo" : "spesa in arrivo"}</span></span><span class="num">${r.type === "inc" ? "+" : "−"}${fmtEur(r.amount)}</span></li>`).join("");
+  const upFmt = new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "numeric" });
+  const upDay = (iso) => { const [y, mo, d] = iso.split("-").map(Number); return upFmt.format(new Date(y, mo - 1, d)); };
+  $("upcomingList").innerHTML = up.length ? `<li class="up-title">In arrivo questo mese</li>` + up.map((r) => `<li class="up"><span class="up-d">${upDay(r.date)}</span><span class="up-n">${escapeHtml(r.desc || "Ricorrente")}</span><span class="num ${r.type === "inc" ? "pos" : ""}">${r.type === "inc" ? "+" : "−"}${fmtEur(r.amount)}</span></li>`).join("") : "";
 
   const allAlerts = computeAlerts(sum).slice().sort((a, b) => (a.sev === "over" ? 0 : 1) - (b.sev === "over" ? 0 : 1));
   $("alerts").innerHTML = allAlerts.slice(0, 1).map((a) => `<div class="alert ${a.sev}"><span class="ic" aria-hidden="true">${a.sev === "over" ? "⛔" : "⚠️"}</span>
@@ -1870,6 +1889,9 @@ function renderMoves() {
   const refd = list.filter((m) => m.kind === "ref").reduce((s, m) => s + m.amount, 0);
   $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)}${refd ? " · rimborsi " + fmtEur(refd) : ""} · entrate ${fmtEur(inc)}${list.some((m) => m.kind === "inv") ? " · investito " + fmtSigned(inv) : ""}`;
   $("moveEmpty").hidden = list.length > 0;
+  const monthEmpty = allMovesOf(currentMonth).length === 0 && !$("fSearch").value;
+  $("moveFilters").hidden = monthEmpty; $("moveTotals").hidden = monthEmpty; $("moveTip").hidden = list.length === 0;
+  $("moveEmpty").textContent = monthEmpty ? "Nessun movimento in questo mese. Aggiungine uno con il pulsante +." : "Nessun movimento corrisponde ai filtri.";
   const dayFmt = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
   const today = todayISO(), yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })();
   const dayLabel = (iso) => { const [y, mo, d] = iso.split("-").map(Number), w = dayFmt.format(new Date(y, mo - 1, d)); return iso === today ? "Oggi · " + w : iso === yest ? "Ieri · " + w : w; };
@@ -2097,6 +2119,7 @@ async function deleteCheckpoint(id) {
 
 /* --- Riepilogo del mese "a storie" (5 schede) --- */
 const STORY_KEY = "budgetMensile.storySeen";
+const HINT_KEY = "budgetMensile.amountHint";
 function monthStory(ym) {
   const sum = computeSummary(ym);
   if (!sum.list.length) return null;
@@ -2331,6 +2354,8 @@ function openSheet(kind = "exp", item = null) {
   ["eAmount", "eCat", "eDate"].forEach((id) => $(id).textContent = "");
   ["fAmount", "fDate"].forEach((id) => $(id).removeAttribute("aria-invalid"));
   $("sheetDelete").hidden = !item;
+  // il suggerimento sui tasti + e − compare solo alle prime 3 aperture
+  try { const n = Number(localStorage.getItem(HINT_KEY) || 0); $("amountHint").hidden = n >= 3; if (n < 3) localStorage.setItem(HINT_KEY, String(n + 1)); } catch (e) { /* facoltativo */ }
   renderSheet(); renderQuick();
   $("moveSheet").hidden = false;
   focusLater("fAmount");
