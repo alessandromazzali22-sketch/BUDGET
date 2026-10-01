@@ -92,7 +92,7 @@ header.top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center
 .month-nav input { width: 11.5rem; }
 .tabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--text-2); font-weight: 600; padding: 10px 12px; white-space: nowrap; }
-.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs button[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
 .tabs .ti { display: none; }
 @media (max-width: 640px) {
   :root { --tabbar-h: 62px; }
@@ -363,6 +363,96 @@ tr.total td { font-weight: 650; border-bottom: none; }
 .upcoming li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
 .filters { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
 @media (max-width: 640px) { .filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .filters .search { grid-column: 1 / -1; } }
+
+/* ==========================================================================
+   v5 · DIREZIONE "CARTA": neutri caldi, un solo accento (verde petrolio), tipografia di sistema
+   ========================================================================== */
+:root {
+  --page:#F7F5F0;--surface:#FFFDF9;--surface-2:#EFECE5;--text:#1C1B18;--text-2:#5C5950;--muted:#5C5950;--line:#E4E0D6;--border:rgba(28,27,24,.07);
+  --accent:#17605E;--accent-ink:#FFFFFF;--accent-soft:#DCEBE8;--track:#E6E2D8;--ok:#17605E;--income:#2E9E6A;--income-ink:#1E7A4F;
+  --warn:#E39A2B;--warn-bg:#FBEFD9;--warn-ink:#8A5300;--crit:#D9463E;--crit-bg:#FBE7E5;--crit-ink:#B3261E;--shadow:none;--radius:16px;
+  --day-ok:#DCEBE8;--day-ok-ink:#17605E;--day-over:#FBE7E5;--day-over-ink:#B3261E;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page:#121211;--surface:#1C1B19;--surface-2:#262521;--text:#F2F0EA;--text-2:#B5B1A6;--muted:#B5B1A6;--line:#33312C;--border:rgba(255,255,255,.07);
+    --accent:#5FB3AE;--accent-ink:#0E1F1E;--accent-soft:#1F3634;--track:#2E2D29;--ok:#5FB3AE;--income:#5CC592;--income-ink:#5CC592;
+    --warn:#F0B454;--warn-bg:#3A2F1A;--warn-ink:#F0B454;--crit:#FF7A70;--crit-bg:#3A1D1A;--crit-ink:#FF7A70;--shadow:none;--overlay:rgba(0,0,0,.6);
+    --day-ok:#1F3634;--day-ok-ink:#5FB3AE;--day-over:#3A1D1A;--day-over-ink:#FF7A70; } }
+:root[data-theme="dark"] { --page:#121211;--surface:#1C1B19;--surface-2:#262521;--text:#F2F0EA;--text-2:#B5B1A6;--muted:#B5B1A6;--line:#33312C;--border:rgba(255,255,255,.07);
+    --accent:#5FB3AE;--accent-ink:#0E1F1E;--accent-soft:#1F3634;--track:#2E2D29;--ok:#5FB3AE;--income:#5CC592;--income-ink:#5CC592;
+    --warn:#F0B454;--warn-bg:#3A2F1A;--warn-ink:#F0B454;--crit:#FF7A70;--crit-bg:#3A1D1A;--crit-ink:#FF7A70;--shadow:none;--overlay:rgba(0,0,0,.6);
+    --day-ok:#1F3634;--day-ok-ink:#5FB3AE;--day-over:#3A1D1A;--day-over-ink:#FF7A70; }
+body { font: 16px/1.4 -apple-system, system-ui, "Helvetica Neue", sans-serif; }
+h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.01em; }
+.card { border-radius: 16px; }
+.hero { background: var(--surface); }
+button.primary { border-radius: 12px; min-height: 48px; }
+.alert { border-radius: 12px; }
+/* intestazione: il mese come titolo grande, azioni rotonde */
+header.top { display: block; margin: 6px 0 16px; }
+.brand { display: none; }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.month-title { position: relative; display: flex; align-items: baseline; gap: 8px; min-height: 44px; }
+.month-title h1 { font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: -.4px; }
+.month-title .year { font-size: 17px; color: var(--text-2); }
+.month-title input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0; }
+.top-actions { display: flex; gap: 8px; }
+.month-title { min-width: 0; flex-shrink: 1; }
+.top-actions { flex-shrink: 0; }
+@media (max-width: 420px) { .month-title h1 { font-size: 28px; line-height: 34px; } .month-title .year { font-size: 15px; } .top-actions { gap: 4px; } .month-title { gap: 6px; } }
+.round { width: 44px; height: 44px; min-height: 44px; border-radius: 22px; border: none; background: var(--surface-2); color: var(--text); display: flex; align-items: center; justify-content: center; padding: 0; }
+.round[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+/* barra delle schede: 4 sezioni e l'aggiunta al centro */
+.fab { display: none !important; }
+.tabs .ti svg { display: block; }
+.tabs .tab-add { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; min-height: 40px; align-self: center; margin-left: auto; }
+@media (max-width: 640px) {
+  :root { --tabbar-h: 66px; }
+  .tabs { grid-template-columns: repeat(5, 1fr); align-items: start; }
+  .tabs button[data-tab] { font-size: 11px; font-weight: 500; min-height: 50px; }
+  .tabs button[aria-current="page"] { font-weight: 600; }
+  .tabs .ti { font-size: 0; }
+  .tabs .tab-add { width: 52px; height: 52px; min-height: 52px; border-radius: 26px; padding: 0; justify-content: center; justify-self: center; margin: -12px 0 0; box-shadow: 0 6px 18px rgba(23,96,94,.28); }
+  .tabs .tab-add span { display: none; }
+}
+/* anello e stato del budget */
+.hero-side .status { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; color: var(--text-2); margin-top: 6px; }
+.hero-side .status strong { color: var(--text); font-weight: 600; }
+/* categorie in forma compatta */
+.cat-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+.cat-row { min-width: 0; }
+.cat-row { display: flex; gap: 12px; align-items: center; padding: 12px 0; }
+.cat-row + .cat-row { border-top: 1px solid var(--line); }
+.cat-ico { width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 17px; }
+.cat-main { flex-grow: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.cat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+.cat-val { flex-shrink: 0; }
+.cat-val { font-size: 15px; color: var(--text-2); }
+.cat-val strong { color: var(--text); font-weight: 600; }
+/* previsione di fine mese */
+.fc { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.fc > div { display: grid; gap: 2px; }
+.fc .r { text-align: right; }
+.fc-l { font-size: 13px; color: var(--text-2); }
+.fc-v { font-size: 20px; font-weight: 600; }
+.fc-v2 { font-size: 17px; font-weight: 600; }
+.fc-d { font-size: 13px; color: var(--text-2); margin-top: 8px; }
+/* movimenti raggruppati per giorno */
+.mv-list { display: grid; gap: 18px; }
+.mv-day-h { display: flex; justify-content: space-between; gap: 8px; padding: 0 4px 6px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .3px; }
+.mv-group { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.mv-row { width: 100%; display: flex; gap: 12px; align-items: center; min-height: 56px; padding: 10px 14px; background: none; border: none; border-radius: 0; text-align: left; color: var(--text); font: inherit; }
+.mv-row + .mv-row { border-top: 1px solid var(--line); }
+.mv-row:active { background: var(--surface-2); }
+.mv-main { flex-grow: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.mv-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-sub { font-size: 13px; color: var(--text-2); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mv-amt { font-weight: 600; white-space: nowrap; }
+.link-btn { background: none; border: none; color: var(--accent); font: inherit; font-size: 15px; padding: 0 4px; min-height: 44px; }
+/* tipo di movimento: due scelte principali, due secondarie */
+.type-more { display: flex; gap: 8px; align-items: center; margin: -4px 0 12px; font-size: 13px; color: var(--text-2); }
+.type-more button { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text-2); font-size: 13px; font-weight: 500; }
+.type-more button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -371,24 +461,25 @@ tr.total td { font-weight: 650; border-bottom: none; }
 
   <!-- ===================== INTESTAZIONE ===================== -->
   <header class="top">
-    <div class="brand">
-      <h1>Budget mensile</h1>
-      <span class="sync" id="syncState">Salvato su questo dispositivo</span>
+    <div class="brand"><span class="sync" id="syncState">Salvato su questo dispositivo</span></div>
+    <div class="title-row">
+      <div class="month-title"><h1 id="monthTitle">Mese</h1><span class="year" id="monthYear"></span>
+        <input type="month" id="monthPicker" aria-label="Scegli il mese"></div>
+      <div class="top-actions" role="group" aria-label="Mese e impostazioni">
+        <button class="round" id="prevMonth" aria-label="Mese precedente"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="round" id="nextMonth" aria-label="Mese successivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button class="round" id="settingsBtn" aria-label="Impostazioni" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></button>
+      </div>
     </div>
-    <div class="month-nav" role="group" aria-label="Selezione del mese">
-      <button class="icon" id="prevMonth" aria-label="Mese precedente">‹</button>
-      <input type="month" id="monthPicker" aria-label="Mese">
-      <button class="icon" id="nextMonth" aria-label="Mese successivo">›</button>
-    </div>
-    <button id="themeBtn" aria-label="Cambia tema">Tema: auto</button>
   </header>
 
-  <nav class="tabs" role="tablist" aria-label="Sezioni">
-    <button role="tab" id="tab-mese" data-tab="mese" aria-selected="true"><span class="ti" aria-hidden="true">◐</span>Mese</button>
-    <button role="tab" id="tab-movimenti" data-tab="movimenti" aria-selected="false"><span class="ti" aria-hidden="true">≡</span>Movimenti</button>
-    <button role="tab" id="tab-obiettivi" data-tab="obiettivi" aria-selected="false"><span class="ti" aria-hidden="true">◎</span>Patrimonio</button>
-    <button role="tab" id="tab-analisi" data-tab="analisi" aria-selected="false"><span class="ti" aria-hidden="true">▥</span>Analisi</button>
-    <button role="tab" id="tab-impostazioni" data-tab="impostazioni" aria-selected="false"><span class="ti" aria-hidden="true">⚙</span>Impostazioni</button>
+  <nav class="tabs" aria-label="Sezioni">
+    <button type="button" id="tab-mese" data-tab="mese" aria-current="page"><span class="ti" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 8 8h-8z"/></svg></span>Mese</button>
+    <button type="button" id="tab-movimenti" data-tab="movimenti"><span class="ti" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11"/><circle cx="5" cy="7" r="0.9"/><circle cx="5" cy="12" r="0.9"/><circle cx="5" cy="17" r="0.9"/></svg></span>Movimenti</button>
+    <button type="button" class="tab-add" id="tabAdd" aria-label="Nuovo movimento"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Nuovo</span></button>
+    <button type="button" id="tab-obiettivi" data-tab="obiettivi"><span class="ti" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></svg></span>Patrimonio</button>
+    <button type="button" id="tab-analisi" data-tab="analisi"><span class="ti" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg></span>Analisi</button>
+    <button type="button" id="tab-impostazioni" data-tab="impostazioni" hidden>Impostazioni</button>
   </nav>
 
   <div id="storageWarning" class="alert over" role="alert" hidden style="margin-bottom:12px">
@@ -413,7 +504,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
   </div>
 
   <!-- ============================ SCHEDA: MESE ============================ -->
-  <section class="stack" id="panel-mese" role="tabpanel" aria-labelledby="tab-mese">
+  <section class="stack" id="panel-mese" aria-labelledby="tab-mese">
     <section class="card hero" id="todayCard" aria-label="Quanto puoi spendere">
       <div class="hero-main">
         <div class="ring-wrap">
@@ -427,8 +518,8 @@ tr.total td { font-weight: 650; border-bottom: none; }
         <div class="hero-side">
           <div class="small" id="todayExplain"></div>
           <div class="bar big" id="kpiBar" role="progressbar" aria-label="Utilizzo del budget totale" aria-valuemin="0" aria-valuemax="100"><span style="width:0%"></span></div>
-          <div class="small muted" id="kpiPct" style="margin-top:4px"></div>
-          <div class="small" id="forecastLine" hidden style="margin-top:8px"></div>
+          <div class="status" id="kpiPct"></div>
+
           <div class="week" id="weekCard" hidden>
             <div class="week-head"><span class="emo" id="weekIcon"></span><span id="weekTitle"></span></div>
             <div class="week-val"><strong id="weekLeft"></strong> <span class="muted small" id="weekOf"></span></div>
@@ -440,57 +531,22 @@ tr.total td { font-weight: 650; border-bottom: none; }
       <ul class="upcoming small" id="upcomingList" hidden></ul>
     </section>
 
-    <div class="kpis" aria-label="Riepilogo del mese">
-      <div class="card kpi"><div class="label">Budget spese</div><div class="value" id="kpiBudget">—</div><div class="sub" id="kpiBudgetSub"></div></div>
-      <div class="card kpi"><div class="label">Speso</div><div class="value" id="kpiSpent">0,00 €</div><div class="sub" id="kpiCount"></div></div>
-      <div class="card kpi"><div class="label">Entrate</div><div class="value" id="kpiIncome">0,00 €</div><div class="sub" id="kpiIncomeSub"></div></div>
-      <div class="card kpi"><div class="label">Saldo del mese</div><div class="value" id="kpiBalance">0,00 €</div><div class="sub" id="kpiBalanceSub"></div></div>
-    </div>
-
     <section class="alerts" id="alerts" aria-live="polite" aria-label="Avvisi di budget"></section>
 
-    <section class="card" id="calCard" aria-labelledby="calTitle">
-      <div class="card-head"><h2 id="calTitle">Giorni in budget</h2><button class="chip" id="storyBtn">📖 Riepilogo del mese</button></div>
-      <div id="calBody">
-        <div class="cal-stats" id="calStats"></div>
-        <div class="cal" id="calGrid" role="group" aria-label="Giorni del mese"></div>
-        <div class="cal-legend"><span><i style="background:var(--day-ok)"></i>entro la quota</span><span><i style="background:var(--day-over)"></i>oltre la quota</span><span><i style="background:var(--surface-2)"></i>giorni futuri</span></div>
-        <div class="cal-info" id="calInfo" aria-live="polite"></div>
-      </div>
-      <div class="empty" id="calEmpty" hidden>Imposta un budget per vedere i giorni in cui sei rimasto nella quota giornaliera.</div>
-    </section>
-
-    <div class="grid-2">
-      <section class="card" aria-labelledby="chartTitle">
-        <div class="card-head"><h2 id="chartTitle">Ripartizione della spesa</h2></div>
-        <div class="chart-box" id="chartBox" hidden><canvas id="pie" aria-label="Grafico a torta della spesa per categoria" role="img"></canvas></div>
-        <div class="empty" id="chartEmpty">Nessuna spesa registrata in questo mese.</div>
-        <div class="empty" id="chartFail" hidden>Grafico non disponibile: la libreria Chart.js non si è caricata (serve una connessione Internet). Tabelle e avvisi funzionano comunque.</div>
-      </section>
-      <section class="card" aria-labelledby="savTitle">
-        <div class="card-head"><h2 id="savTitle">Risparmio del mese</h2></div>
-        <table><tbody id="savingBody"></tbody></table>
-        <p class="hint" style="margin-top:8px">"Senza aiuti" esclude le entrate delle fonti segnate come aiuto (Impostazioni → Fonti di entrata).</p>
-      </section>
-    </div>
-
     <section class="card" aria-labelledby="sumTitle">
-      <div class="card-head"><h2 id="sumTitle">Riepilogo per categoria</h2></div>
-      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella dei budget per categoria">
-        <table class="summary">
-          <thead><tr><th>Categoria</th><th class="r">Budget</th><th class="r">Speso</th><th class="r">Residuo</th><th class="r">% utilizzo</th><th style="width:22%">Avanzamento</th></tr></thead>
-          <tbody id="summaryBody"></tbody>
-        </table>
-      </div>
+      <div class="card-head"><h2 id="sumTitle">Categorie</h2></div>
+      <div class="cat-list" id="summaryBody"></div>
     </section>
+
+    <section class="card" id="forecastLine" hidden aria-label="Liquidità prevista a fine mese"></section>
   </section>
 
   <!-- ========================== SCHEDA: MOVIMENTI ========================== -->
-  <section class="stack" id="panel-movimenti" role="tabpanel" aria-labelledby="tab-movimenti" hidden>
+  <section class="stack" id="panel-movimenti" aria-labelledby="tab-movimenti" hidden>
     <section class="card">
       <div class="card-head">
         <h2>Movimenti del mese</h2>
-        <div class="btn-row"><button id="addFromList" class="primary">+ Nuovo movimento</button><button id="exportCsv">Esporta CSV</button></div>
+        <div class="btn-row"><button id="addFromList" class="primary" hidden>+ Nuovo movimento</button><button id="exportCsv" class="link-btn">Esporta CSV</button></div>
       </div>
       <div class="filters">
         <input class="search" type="search" id="fSearch" placeholder="Cerca per descrizione, categoria o fonte" aria-label="Cerca" autocomplete="off">
@@ -499,18 +555,14 @@ tr.total td { font-weight: 650; border-bottom: none; }
         <select id="fSort" aria-label="Ordina"><option value="date-desc">Più recenti</option><option value="date-asc">Meno recenti</option><option value="amt-desc">Importo più alto</option><option value="amt-asc">Importo più basso</option></select>
       </div>
       <div class="small muted" id="moveTotals" style="margin-bottom:6px"></div>
-      <div class="table-scroll" tabindex="0" role="region" aria-label="Tabella dei movimenti">
-        <table class="moves">
-          <thead><tr><th>Data</th><th>Categoria / fonte</th><th>Descrizione</th><th class="r">Importo</th><th class="r">Azioni</th></tr></thead>
-          <tbody id="moveBody"></tbody>
-        </table>
-      </div>
+      <div class="mv-list" id="moveBody"></div>
       <div class="empty" id="moveEmpty" hidden>Nessun movimento corrisponde. Aggiungine uno con il pulsante +.</div>
+      <p class="small muted" style="margin-top:10px">Tocca un movimento per modificarlo o eliminarlo.</p>
     </section>
   </section>
 
   <!-- ========================== SCHEDA: OBIETTIVI ========================== -->
-  <section class="stack" id="panel-obiettivi" role="tabpanel" aria-labelledby="tab-obiettivi" hidden>
+  <section class="stack" id="panel-obiettivi" aria-labelledby="tab-obiettivi" hidden>
     <section class="card" id="nwCard" aria-labelledby="nwTitle">
       <div class="card-head"><h2 id="nwTitle">Patrimonio</h2><button class="primary" id="nwEdit">Controllo saldi</button></div>
       <div id="nwEmpty" hidden>
@@ -547,12 +599,47 @@ tr.total td { font-weight: 650; border-bottom: none; }
   </section>
 
   <!-- =========================== SCHEDA: ANALISI =========================== -->
-  <section class="stack" id="panel-analisi" role="tabpanel" aria-labelledby="tab-analisi" hidden>
+  <section class="stack" id="panel-analisi" aria-labelledby="tab-analisi" hidden>
     <section class="card" id="autCard">
       <div class="card-head"><h2>Autonomia</h2><span class="small muted" id="autRange"></span></div>
       <div id="autBody"></div>
       <p class="small muted" style="margin-top:10px">Quanta parte delle spese, al netto dei rimborsi, è coperta dalle tue entrate. Ricorrente: solo i redditi fissi, come lo stipendio. Propria: anche le entrate occasionali. Il resto arriva dagli aiuti o dai risparmi. Il tipo di ogni fonte si imposta in Impostazioni.</p>
     </section>
+
+    <h2 style="margin:8px 4px 0">Il mese in sintesi</h2>
+    <div class="kpis" aria-label="Riepilogo del mese">
+      <div class="card kpi"><div class="label">Budget spese</div><div class="value" id="kpiBudget">—</div><div class="sub" id="kpiBudgetSub"></div></div>
+      <div class="card kpi"><div class="label">Speso</div><div class="value" id="kpiSpent">0,00 €</div><div class="sub" id="kpiCount"></div></div>
+      <div class="card kpi"><div class="label">Entrate</div><div class="value" id="kpiIncome">0,00 €</div><div class="sub" id="kpiIncomeSub"></div></div>
+      <div class="card kpi"><div class="label">Saldo del mese</div><div class="value" id="kpiBalance">0,00 €</div><div class="sub" id="kpiBalanceSub"></div></div>
+    </div>
+
+    <section class="card" id="calCard" aria-labelledby="calTitle">
+      <div class="card-head"><h2 id="calTitle">Giorni in budget</h2><button class="chip" id="storyBtn">📖 Riepilogo del mese</button></div>
+      <div id="calBody">
+        <div class="cal-stats" id="calStats"></div>
+        <div class="cal" id="calGrid" role="group" aria-label="Giorni del mese"></div>
+        <div class="cal-legend"><span><i style="background:var(--day-ok)"></i>entro la quota</span><span><i style="background:var(--day-over)"></i>oltre la quota</span><span><i style="background:var(--surface-2)"></i>giorni futuri</span></div>
+        <div class="cal-info" id="calInfo" aria-live="polite"></div>
+      </div>
+      <div class="empty" id="calEmpty" hidden>Imposta un budget per vedere i giorni in cui sei rimasto nella quota giornaliera.</div>
+    </section>
+
+    <div class="grid-2">
+      <section class="card" aria-labelledby="chartTitle">
+        <div class="card-head"><h2 id="chartTitle">Ripartizione della spesa</h2></div>
+        <div class="chart-box" id="chartBox" hidden><canvas id="pie" aria-label="Grafico a torta della spesa per categoria" role="img"></canvas></div>
+        <div class="empty" id="chartEmpty">Nessuna spesa registrata in questo mese.</div>
+        <div class="empty" id="chartFail" hidden>Grafico non disponibile: la libreria Chart.js non si è caricata (serve una connessione Internet). Tabelle e avvisi funzionano comunque.</div>
+      </section>
+      <section class="card" aria-labelledby="savTitle">
+        <div class="card-head"><h2 id="savTitle">Risparmio del mese</h2></div>
+        <table><tbody id="savingBody"></tbody></table>
+        <p class="hint" style="margin-top:8px">"Senza aiuti" esclude le entrate delle fonti segnate come aiuto (Impostazioni → Fonti di entrata).</p>
+      </section>
+    </div>
+
+
     <section class="card">
       <div class="card-head"><h2>Ultimi 6 mesi</h2><span class="small muted" id="trendRange"></span></div>
       <div class="chart-box tall" id="trendBox"><canvas id="trend" role="img" aria-label="Entrate e spese degli ultimi sei mesi"></canvas></div>
@@ -571,7 +658,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
   </section>
 
   <!-- ======================== SCHEDA: IMPOSTAZIONI ======================== -->
-  <section class="stack" id="panel-impostazioni" role="tabpanel" aria-labelledby="tab-impostazioni" hidden>
+  <section class="stack" id="panel-impostazioni" aria-labelledby="tab-impostazioni" hidden>
     <section class="card">
       <div class="card-head"><h2>Budget del mese <span class="badge" id="inheritBadge"></span></h2></div>
       <div class="field" style="max-width:320px">
@@ -622,6 +709,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
     <section class="card">
       <div class="card-head"><h2>Dati</h2></div>
       <div class="menu-list">
+        <button id="themeBtn" aria-label="Cambia tema">Tema: auto</button>
         <button id="exportCsv2">Esporta CSV dei movimenti del mese</button>
         <button id="exportJson">Salva backup cifrato</button>
         <button id="verifyBackup">Verifica un backup (senza toccare i dati)</button>
@@ -645,12 +733,14 @@ tr.total td { font-weight: 650; border-bottom: none; }
   <div class="sheet-card">
     <div class="card-head">
       <h2 id="sheetTitle">Nuova spesa</h2>
-      <button class="icon" id="sheetClose" aria-label="Chiudi">✕</button>
+      <button class="round" id="sheetClose" aria-label="Chiudi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <form id="moveForm" novalidate>
-      <div class="seg" role="group" aria-label="Tipo di movimento" style="margin-bottom:12px">
+      <div class="seg" role="group" aria-label="Tipo di movimento" style="margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr">
         <button type="button" id="typeExp" aria-pressed="true">Spesa</button>
         <button type="button" id="typeInc" aria-pressed="false">Entrata</button>
+      </div>
+      <div class="type-more" role="group" aria-label="Altri tipi di movimento"><span>Altro:</span>
         <button type="button" id="typeInv" aria-pressed="false">Investimento</button>
         <button type="button" id="typeRef" aria-pressed="false">Rimborso</button>
       </div>
@@ -800,7 +890,7 @@ tr.total td { font-weight: 650; border-bottom: none; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "4.4.0";
+const APP_VERSION = "5.0.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -1472,9 +1562,10 @@ function forecastHtml(f) {
   const parts = [`oggi ${fmtEur(f.now)}`];
   if (f.recInc) parts.push(`+${fmtEur(f.recInc)} entrate in arrivo`);
   if (f.recExp) parts.push(`−${fmtEur(f.recExp)} spese ricorrenti`);
-  if (f.hasBudget) parts.push(`−${fmtEur(f.budgetLeft)} di budget ancora da spendere`);
-  return `Liquidità prevista a fine mese: <strong class="num ${f.value < 0 ? "neg" : ""}">${fmtEur(f.value)}</strong>${f.saved > 0 ? ` · liberi <strong class="num ${f.free < 0 ? "neg" : ""}">${fmtEur(f.free)}</strong>` : ""}
-    <br><span class="muted">${parts.join(", ")}${f.hasBudget ? "" : " (nessun budget impostato: contano solo i ricorrenti)"}.</span>`;
+  if (f.hasBudget && f.budgetLeft > 0) parts.push(`−${fmtEur(f.budgetLeft)} di budget ancora da spendere`);
+  return `<div class="fc"><div><span class="fc-l">Liquidità prevista a fine mese</span><span class="fc-v num ${f.value < 0 ? "neg" : ""}">${fmtEur(f.value)}</span></div>`
+    + (f.saved > 0 ? `<div class="r"><span class="fc-l">di cui liberi</span><span class="fc-v2 num ${f.free < 0 ? "neg" : ""}">${fmtEur(f.free)}</span></div>` : "")
+    + `</div><div class="fc-d">${parts.join(", ")}${f.hasBudget ? "" : " (nessun budget impostato: contano solo i ricorrenti)"}.</div>`;
 }
 function goalStats(g) {
   const saved = g.deposits.reduce((s, d) => s + d.amount, 0);
@@ -1557,10 +1648,13 @@ const setSigned = (el, cents) => { el.textContent = fmtSigned(cents); el.classNa
 function render() {
   renderNotices();
   $("monthPicker").value = currentMonth;
-  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === currentTab)));
+  { const [my, mm] = currentMonth.split("-").map(Number); const nm = new Intl.DateTimeFormat("it-IT", { month: "long" }).format(new Date(my, mm - 1, 1));
+    $("monthTitle").textContent = nm.charAt(0).toUpperCase() + nm.slice(1); $("monthYear").textContent = String(my); }
+  $("settingsBtn").setAttribute("aria-pressed", String(currentTab === "impostazioni"));
+  document.querySelectorAll(".tabs button[data-tab]").forEach((b) => { if (b.dataset.tab === currentTab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   ["mese", "movimenti", "obiettivi", "analisi", "impostazioni"].forEach((t) => { $("panel-" + t).hidden = t !== currentTab; });
   const sum = computeSummary(currentMonth);
-  if (currentTab === "mese") renderMonth(sum);
+  if (currentTab === "mese" || currentTab === "analisi") renderMonth(sum);
   if (currentTab === "movimenti") renderMoves();
   if (currentTab === "obiettivi") { renderNetWorth(); renderGoals(); }
   if (currentTab === "analisi") renderAnalysis();
@@ -1587,19 +1681,25 @@ function renderMonth(sum) {
   bar.className = "bar big " + barClass(t.level);
   bar.setAttribute("aria-valuenow", t.pct == null ? 0 : Math.round(t.pct));
   bar.firstElementChild.style.width = (t.pct == null ? 0 : Math.min(t.pct, 100)) + "%";
-  $("kpiPct").textContent = t.pct == null ? "" : `Utilizzo del budget: ${fmtPct(t.pct)} (${fmtEur(t.spent)} su ${fmtEur(t.budget)})`;
+  $("kpiPct").innerHTML = t.pct == null ? "" : `<span>Speso <strong class="num">${fmtEur(t.spent)}</strong> di ${fmtEur(t.budget)}</span><span class="num ${t.left < 0 ? "neg" : ""}">${t.left >= 0 ? "restano " + fmtEur(t.left) : "oltre di " + fmtEur(-t.left)}</span>`;
   // anello: quanto resta del budget del mese
-  const RING_C = 326.73, frac = t.budget > 0 ? Math.max(0, Math.min(1, t.left / t.budget)) : 0;
+  const RING_C = 326.73, frac = t.budget > 0 ? (t.left < 0 ? 1 : Math.max(0, Math.min(1, t.left / t.budget))) : 0;   // oltre il budget: anello pieno in colore critico
   $("ringVal").setAttribute("stroke-dashoffset", String(RING_C * (1 - frac)));
   $("ringVal").setAttribute("class", "ring-val" + (t.level === "warn" ? " warn" : (t.level === "full" || t.level === "over") ? " over" : ""));
-  $("ringSub").textContent = t.budget > 0 ? (t.left >= 0 ? `restano ${fmtEur(t.left)} di ${fmtEur(t.budget)}` : `oltre di ${fmtEur(-t.left)}`) : "";
-  if (td) {
+  $("ringSub").textContent = "";
+  if (td && td.available > 0) {
     $("todayLabel").textContent = "Puoi spendere oggi";
     countUp($("todayValue"), td.perDay);
-    $("todayValue").className = "big" + (td.perDay === 0 ? " neg" : "");
-    $("todayExplain").innerHTML = td.available > 0
-      ? `Restano ${fmtEur(td.available)} per ${td.daysLeft} ${td.daysLeft === 1 ? "giorno" : "giorni"}${td.committed ? `, già tolti ${fmtEur(td.committed)} di spese ricorrenti in arrivo` : ""}.`
-      : `Budget del mese esaurito${td.committed ? " considerando le spese ricorrenti in arrivo" : ""}: ogni nuova spesa è fuori budget.`;
+    $("todayValue").className = "big";
+    $("ringSub").textContent = `per ${td.daysLeft} ${td.daysLeft === 1 ? "giorno" : "giorni"}`;
+    $("todayExplain").innerHTML = td.committed ? `Già tolti ${fmtEur(td.committed)} di spese ricorrenti in arrivo.` : "";
+  } else if (td) {
+    // budget esaurito: si mostra di quanto, non uno zero
+    $("todayLabel").textContent = "Oltre il budget di";
+    $("todayValue")._v = null; $("todayValue").textContent = fmtEur(-td.available);
+    $("todayValue").className = "big neg";
+    $("ringSub").textContent = td.committed ? "comprese le spese in arrivo" : "";
+    $("todayExplain").textContent = "Da qui a fine mese ogni spesa è fuori budget.";
   } else {
     const isNow = currentMonth === monthOf(todayISO());
     $("todayLabel").textContent = isNow ? "Puoi spendere oggi" : "Utilizzo del budget";
@@ -1615,8 +1715,9 @@ function renderMonth(sum) {
   $("upcomingList").hidden = up.length === 0;
   $("upcomingList").innerHTML = up.map((r) => `<li><span>${fmtDate(r.date)} · ${escapeHtml(r.desc || "Ricorrente")} <span class="badge${r.type === "inc" ? " in" : ""}">${r.type === "inc" ? "entrata in arrivo" : "spesa in arrivo"}</span></span><span class="num">${r.type === "inc" ? "+" : "−"}${fmtEur(r.amount)}</span></li>`).join("");
 
-  $("alerts").innerHTML = computeAlerts(sum).map((a) => `<div class="alert ${a.sev}"><span class="ic" aria-hidden="true">${a.sev === "over" ? "⛔" : "⚠️"}</span>
-    <div><span class="small" style="font-weight:700">${a.sev === "over" ? "Budget superato" : "Attenzione"} · </span>${alertText(a)}</div></div>`).join("");
+  const allAlerts = computeAlerts(sum).slice().sort((a, b) => (a.sev === "over" ? 0 : 1) - (b.sev === "over" ? 0 : 1));
+  $("alerts").innerHTML = allAlerts.slice(0, 1).map((a) => `<div class="alert ${a.sev}"><span class="ic" aria-hidden="true">${a.sev === "over" ? "⛔" : "⚠️"}</span>
+    <div>${alertText(a)}${allAlerts.length > 1 ? ` <span class="small">Altri ${allAlerts.length - 1} avvisi nelle categorie qui sotto.</span>` : ""}</div></div>`).join("");
 
   const rate = (inc, sp) => inc > 0 ? fmtPct((inc - sp) / inc * 100) : "—";
   const bal = sum.income - t.spent, own = sum.ownIncome - t.spent;
@@ -1635,9 +1736,12 @@ function renderMonth(sum) {
       <td class="r num" data-l="Residuo" style="${r.budget > 0 && r.left < 0 ? "color:var(--crit-ink);font-weight:600" : ""}">${r.budget > 0 ? fmtEur(r.left) : "—"}</td>
       <td class="r num" data-l="Utilizzo">${r.pct == null ? (r.spent > 0 ? '<span class="muted small">senza budget</span>' : "—") : fmtPct(r.pct)}</td>
       <td class="barcell">${barHtml(r.pct, r.level, "Utilizzo " + name)}</td>`;
-  $("summaryBody").innerHTML = sum.rows.map((r) => `<tr><td class="cat"><span class="dot" style="background:${colorOf(r.cat)}"></span><span class="emo">${escapeHtml(r.cat.icon || "")}</span> ${escapeHtml(r.cat.name)} ${pillHtml(r.level)}</td>${cell(r, r.cat.name)}</tr>`).join("")
-    + `<tr class="total"><td class="cat">Totale ${pillHtml(t.level)}</td>${cell(t, "totale")}</tr>`;
-  renderPie(sum);
+  const catRows = sum.rows.filter((r) => r.budget > 0 || r.spent > 0);
+  $("summaryBody").innerHTML = catRows.length ? catRows.map((r) => `<div class="cat-row"><span class="cat-ico" aria-hidden="true">${escapeHtml(r.cat.icon || "")}</span>
+      <div class="cat-main"><div class="cat-top"><span class="cat-name">${escapeHtml(r.cat.name)}</span>
+      <span class="cat-val num">${r.budget > 0 ? `<strong class="${r.left < 0 ? "neg" : ""}">${fmtEur(r.spent)}</strong> / ${fmtEur(r.budget)}` : `<strong>${fmtEur(r.spent)}</strong> · senza budget`}</span></div>
+      ${barHtml(r.pct, r.level, "Utilizzo " + r.cat.name)}</div></div>`).join("") : `<div class="empty">Nessuna spesa e nessun budget in questo mese.</div>`;
+  if (currentTab === "analisi") renderPie(sum);   // la ripartizione ora vive in Analisi
 }
 
 /** Numero che scorre fino al nuovo valore (disattivato con "riduci movimento" e nei test automatici). */
@@ -1719,7 +1823,7 @@ function renderCalendar(sum) {
   $("storyBtn").hidden = sum.list.length === 0;
   if (!c) return;
   const isNow = currentMonth === monthOf(todayISO());
-  $("calStats").innerHTML = (isNow && c.streak ? `<span>🔥 <strong>${c.streak}</strong> ${c.streak === 1 ? "giorno" : "giorni di fila"}</span>` : "")
+  $("calStats").innerHTML = (isNow && c.streak ? `<span>Nel budget da <strong>${c.streak}</strong> ${c.streak === 1 ? "giorno" : "giorni"}</span>` : "")
     + (c.past ? `<span><strong>${c.green}</strong> su ${c.past} giorni in budget</span>` : "")
     + `<span>quota giornaliera <strong class="num">${fmtEur(c.daily)}</strong></span>`;
   const [y, m] = currentMonth.split("-").map(Number), lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
@@ -1765,17 +1869,28 @@ function renderMoves() {
   const refd = list.filter((m) => m.kind === "ref").reduce((s, m) => s + m.amount, 0);
   $("moveTotals").textContent = `${list.length} ${list.length === 1 ? "movimento" : "movimenti"} · spese ${fmtEur(exp)}${refd ? " · rimborsi " + fmtEur(refd) : ""} · entrate ${fmtEur(inc)}${list.some((m) => m.kind === "inv") ? " · investito " + fmtSigned(inv) : ""}`;
   $("moveEmpty").hidden = list.length > 0;
-  $("moveBody").innerHTML = list.map((m) => {
+  const dayFmt = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  const today = todayISO(), yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })();
+  const dayLabel = (iso) => { const [y, mo, d] = iso.split("-").map(Number), w = dayFmt.format(new Date(y, mo - 1, d)); return iso === today ? "Oggi · " + w : iso === yest ? "Ieri · " + w : w; };
+  const rowHtml = (m) => {
     const isRef = m.kind === "ref", isExp = m.kind === "exp", isInv = m.kind === "inv", ref = isExp || isRef ? catById(m.catId) : isInv ? trType(m.dir) : srcById(m.sourceId);
-    const dot = isExp ? (ref ? colorOf(ref) : OTHER_COLOR) : isInv ? "var(--muted)" : "var(--income)";
-    return `<tr data-id="${m.id}" data-kind="${m.kind}">
-      <td class="num">${fmtDate(m.date)}</td>
-      <td><span class="dot" style="background:${dot}"></span><span class="emo">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span> ${escapeHtml(ref ? ref.name : "(eliminata)")}${isExp ? "" : isRef ? ' <span class="badge in">rimborso</span>' : isInv ? ' <span class="badge">investimento</span>' : ' <span class="badge in">entrata</span>'}</td>
-      <td>${m.tag ? `<span class="badge">${escapeHtml(m.tag)}</span> ` : ""}${escapeHtml(m.desc || "")}${m.recId ? ' <span class="badge">ricorrente</span>' : ""}${m.demo ? ' <span class="badge">demo</span>' : ""}</td>
-      <td class="r num"><strong class="${isExp || isInv ? "" : "pos"}">${isInv ? "⇄ " : isExp ? "−" : "+"}${fmtEur(m.amount)}</strong></td>
-      <td class="r actions"><button class="link" data-act="edit">Modifica</button><button class="link danger" data-act="del">Elimina</button></td>
-    </tr>`;
-  }).join("");
+    const refName = ref ? ref.name : "(eliminata)", title = m.desc || refName;
+    const sub = [m.desc ? refName : "", m.tag || ""].filter(Boolean).map(escapeHtml).join(" · ");
+    const badges = (isRef ? '<span class="badge in">rimborso</span>' : "") + (isInv ? '<span class="badge">investimento</span>' : "") + (m.recId ? '<span class="badge">ricorrente</span>' : "") + (m.demo ? '<span class="badge">demo</span>' : "");
+    const sign = isInv ? (m.dir === "out" ? "+" : "−") : isExp ? "−" : "+";
+    return `<button type="button" class="mv-row" data-id="${m.id}" data-kind="${m.kind}" aria-label="${escapeHtml(title)}, ${sign}${fmtEur(m.amount)}. Modifica">
+      <span class="cat-ico" aria-hidden="true">${escapeHtml(ref && ref.icon ? ref.icon : "")}</span>
+      <span class="mv-main"><span class="mv-title">${escapeHtml(title)}</span>${sub || badges ? `<span class="mv-sub">${sub}${badges}</span>` : ""}</span>
+      <span class="mv-amt num ${isExp || isInv ? "" : "pos"}">${sign}${fmtEur(m.amount)}</span></button>`;
+  };
+  if (sort === "date-desc" || sort === "date-asc") {
+    const days = []; for (const m of list) { const d = days[days.length - 1]; if (d && d.date === m.date) d.items.push(m); else days.push({ date: m.date, items: [m] }); }
+    $("moveBody").innerHTML = days.map((d) => {
+      const out = d.items.filter((m) => m.kind === "exp").reduce((a, m) => a + m.amount, 0), inn = d.items.filter((m) => m.kind === "inc" || m.kind === "ref").reduce((a, m) => a + m.amount, 0);
+      const tot = [out ? "−" + fmtEur(out) : "", inn ? "+" + fmtEur(inn) : ""].filter(Boolean).join(" · ");
+      return `<section aria-label="${escapeHtml(dayLabel(d.date))}"><div class="mv-day-h"><span>${escapeHtml(dayLabel(d.date))}</span><span class="num">${tot}</span></div><div class="mv-group">${d.items.map(rowHtml).join("")}</div></section>`;
+    }).join("");
+  } else $("moveBody").innerHTML = `<div class="mv-group">${list.map(rowHtml).join("")}</div>`;
 }
 
 /* --- Scheda Obiettivi --- */
@@ -2791,7 +2906,9 @@ function setTab(tab) {
 function goMonth(ym) { currentMonth = ym; render(); }
 
 function bindEvents() {
-  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  document.querySelectorAll(".tabs button[data-tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  $("tabAdd").addEventListener("click", () => openSheet("exp"));
+  $("settingsBtn").addEventListener("click", () => setTab(currentTab === "impostazioni" ? "mese" : "impostazioni"));
   $("monthPicker").addEventListener("change", (ev) => { if (/^\d{4}-\d{2}$/.test(ev.target.value)) goMonth(ev.target.value); });
   $("prevMonth").addEventListener("click", () => goMonth(shiftMonth(currentMonth, -1)));
   $("nextMonth").addEventListener("click", () => goMonth(shiftMonth(currentMonth, 1)));
@@ -2842,10 +2959,9 @@ function bindEvents() {
   });
   $("sheetDelete").addEventListener("click", () => { const id = sheet.editing, kind = kindOfId(id); closeSheet(); deleteMove(id, kind); });
   $("moveBody").addEventListener("click", (ev) => {
-    const b = ev.target.closest("button[data-act]"); if (!b) return;
-    const tr = b.closest("tr"), id = tr.dataset.id, kind = tr.dataset.kind;
-    if (b.dataset.act === "edit") { const item = listOfKind(kind).find((x) => x.id === id); openSheet(kind, { ...item, kind }); }
-    else deleteMove(id, kind);
+    const b = ev.target.closest("button.mv-row"); if (!b) return;
+    const id = b.dataset.id, kind = b.dataset.kind, item = listOfKind(kind).find((x) => x.id === id);
+    if (item) openSheet(kind, { ...item, kind });
   });
   ["fSearch", "fType", "fCatFilter", "fSort"].forEach((id) => $(id).addEventListener("input", renderMoves));
   $("exportCsv").addEventListener("click", exportCsv);
