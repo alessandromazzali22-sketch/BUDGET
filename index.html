@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Budget mensile</title>
-<meta name="theme-color" content="#f7f7f4">
+<meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -468,7 +469,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <div class="top-actions" role="group" aria-label="Mese e impostazioni">
         <button class="round" id="prevMonth" aria-label="Mese precedente"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <button class="round" id="nextMonth" aria-label="Mese successivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-        <button class="round" id="settingsBtn" aria-label="Impostazioni" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></button>
+        <button class="round" id="settingsBtn" aria-label="Impostazioni" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
       </div>
     </div>
   </header>
@@ -890,7 +891,7 @@ header.top { display: block; margin: 6px 0 16px; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "5.0.0";
+const APP_VERSION = "5.0.1";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -2892,6 +2893,12 @@ function applyTheme() {
   const root = document.documentElement;
   if (themePref === "auto") { if (hostTheme) root.setAttribute("data-theme", hostTheme); else root.removeAttribute("data-theme"); }
   else root.setAttribute("data-theme", themePref);
+  // la barra di stato segue il tema scelto nell'app, anche quando è diverso da quello del telefono
+  const forced = themePref === "auto" ? hostTheme : themePref;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    const isDark = (m.getAttribute("media") || "").includes("dark");
+    m.setAttribute("content", forced ? (forced === "dark" ? "#121211" : "#F7F5F0") : (isDark ? "#121211" : "#F7F5F0"));
+  });
 }
 function cycleTheme() {
   themePref = { auto: "light", light: "dark", dark: "auto" }[themePref];
