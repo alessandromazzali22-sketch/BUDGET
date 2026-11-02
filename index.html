@@ -181,7 +181,7 @@ header.top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center
 .story-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .story-track::-webkit-scrollbar { display: none; }
 .slide { flex: 0 0 100%; scroll-snap-align: start; display: grid; align-content: center; gap: 14px; padding: 24px 28px;
-  background: radial-gradient(120% 80% at 20% 10%, var(--g1), transparent 60%), radial-gradient(120% 90% at 90% 100%, var(--g2), transparent 60%), #0b0b0c; }
+  background: radial-gradient(120% 70% at 15% 0%, var(--g1), transparent 70%), var(--g2); color: #F2F0EA; }
 .slide .kicker { font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; opacity: .75; font-weight: 600; }
 .slide .huge { font-size: clamp(2.4rem, 11vw, 3.6rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.02; font-variant-numeric: tabular-nums; }
 .slide .emoji { font-size: 4rem; line-height: 1; }
@@ -471,6 +471,18 @@ header.top { display: block; margin: 6px 0 16px; }
 .upcoming li.up { display: grid; grid-template-columns: minmax(3.6em, max-content) minmax(0, 1fr) auto; gap: 10px; align-items: baseline; border-top: 1px solid var(--line); }
 .up-d { color: var(--text-2); white-space: nowrap; }
 .up-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* v5.2 */
+.calc-res { font-size: 15px; font-weight: 600; color: var(--accent); min-height: 0; margin-top: 4px; }
+.calc-res:empty { display: none; }
+#dateHint { color: var(--warn-ink); }
+@media (max-width: 640px) {
+  table.compare td { min-width: 0; overflow-wrap: anywhere; }
+  table.compare td[data-l]::before { display: block; font-size: 12px; }
+  .src-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .src-row > :first-child { grid-column: 1 / -1; }
+  .src-row select { max-width: none; width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -647,6 +659,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <section class="card" aria-labelledby="chartTitle">
         <div class="card-head"><h2 id="chartTitle">Ripartizione della spesa</h2></div>
         <div class="chart-box" id="chartBox" hidden><canvas id="pie" aria-label="Grafico a torta della spesa per categoria" role="img"></canvas></div>
+        <div class="small muted" id="pieNote" style="margin-top:6px"></div>
         <div class="empty" id="chartEmpty">Nessuna spesa registrata in questo mese.</div>
         <div class="empty" id="chartFail" hidden>Grafico non disponibile: la libreria Chart.js non si è caricata (serve una connessione Internet). Tabelle e avvisi funzionano comunque.</div>
       </section>
@@ -702,7 +715,7 @@ header.top { display: block; margin: 6px 0 16px; }
 
     <section class="card">
       <div class="card-head"><h2>Fonti di entrata</h2></div>
-      <p class="small muted" style="margin-bottom:10px">Segna come "Aiuto" le fonti che non sono reddito tuo, per esempio i soldi della famiglia: il saldo "senza aiuti" le esclude.</p>
+      <p class="small muted" style="margin-bottom:10px">Per ogni fonte scegli il tipo: reddito ricorrente (lo stipendio), reddito occasionale, oppure aiuto esterno (per esempio la famiglia). Il saldo "senza aiuti" e l'autonomia escludono gli aiuti.</p>
       <div id="srcList"></div>
       <form id="addSrcForm" class="row" style="grid-template-columns:minmax(0,1fr) auto;max-width:460px">
         <input type="text" id="newSrc" placeholder="Nuova fonte di entrata" maxlength="40" aria-label="Nome della nuova fonte" autocomplete="off">
@@ -769,6 +782,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <div class="field">
         <label for="fAmount">Importo (€)</label>
         <div class="amount-row"><input type="text" id="fAmount" class="amount-input" inputmode="decimal" enterkeyhint="done" placeholder="0,00" autocomplete="off" required><div class="calc-keys"><button type="button" class="calc-key" data-for="fAmount" data-op="+" aria-label="Aggiungi un importo">+</button><button type="button" class="calc-key" data-for="fAmount" data-op="-" aria-label="Sottrai un importo">−</button></div></div>
+        <div class="calc-res num" id="amountCalc" aria-live="polite"></div>
         <div class="hint" id="amountHint">Per sommare più scontrini usa i tasti + e −: ad esempio 12,50 + 8.</div>
         <div class="err" id="eAmount"></div>
       </div>
@@ -786,6 +800,7 @@ header.top { display: block; margin: 6px 0 16px; }
       <div class="field" style="max-width:260px">
         <label for="fDate">Data</label>
         <input type="date" id="fDate" required>
+        <div class="hint" id="dateHint" hidden></div>
         <div class="err" id="eDate"></div>
       </div>
       <div class="btn-row sheet-actions">
@@ -908,7 +923,7 @@ header.top { display: block; margin: 6px 0 16px; }
 /* ==========================================================================
    1. COSTANTI E UTILITÀ
    ========================================================================== */
-const APP_VERSION = "5.1.1";
+const APP_VERSION = "5.2.0";
 const LOCAL_KEY = "budgetMensile.v1";
 /* Versione dello schema dei dati (indipendente dalla versione dell'app e dal nome della chiave).
    2 = stato senza numero di schema (fino alla v3.1.2); 3 = stesso contenuto, con schemaVersion e migrationLog;
@@ -945,7 +960,9 @@ const CHART_SOURCES = [
 ];
 
 const $ = (id) => document.getElementById(id);
-const eurFmt = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const eurFmtRaw = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+/** Importi sempre con il punto delle migliaia (1.950,00 €), anche dove il browser lo omette sotto 10.000. */
+const eurFmt = { format: (v) => eurFmtRaw.format(v).replace(/\d+(?=,\d)/, (d) => d.replace(/\B(?=(\d{3})+(?!\d))/g, ".")) };
 const pctFmt = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1, minimumFractionDigits: 0 });
 const monthFmt = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const shortMonthFmt = new Intl.DateTimeFormat("it-IT", { month: "short", year: "2-digit" });
@@ -1978,6 +1995,15 @@ function investAt(atDate, excludeDate = null) {
   const f = flowsBetween(cp.date, atDate, cp.ts), base = sumVals(cp.invest);
   return { cp, base, f, value: base + f.invest };
 }
+const cpOrder = (a, b) => a.date.localeCompare(b.date) || cpRank(a) - cpRank(b);
+/** Scarto di un controllo al netto dei conti che compaiono per la prima volta; null se non calcolabile o se è un punto di partenza. */
+function cpGap(k) {
+  if (!k.liquid || typeof k.expectedLiquid !== "number" || k.baseline) return null;
+  const sorted = state.checkpoints.filter((x) => x.liquid).sort(cpOrder), i = sorted.indexOf(k), prev = i > 0 ? sorted[i - 1] : null;
+  const fresh = prev ? Object.keys(k.liquid).filter((id) => !(id in prev.liquid)).reduce((a, id) => a + (k.liquid[id] || 0), 0) : 0;
+  return { gap: sumVals(k.liquid) - k.expectedLiquid - fresh, fresh };
+}
+const lastBaseline = (upTo) => state.checkpoints.filter((k) => k.baseline && k.date <= upTo).sort(cpOrder).pop() || null;
 function netWorthAt(atDate) {
   const l = liquidityAt(atDate), i = investAt(atDate);
   return l || i ? { l, i, total: (l ? l.value : 0) + (i ? i.value : 0) } : null;
@@ -1993,7 +2019,9 @@ function renderNetWorth() {
   $("nwAsOf").textContent = isToday ? "Patrimonio oggi, aggiornato con i movimenti registrati" : `Patrimonio al ${fmtDate(at)}`;
   $("nwTotal").textContent = nw ? fmtEur(nw.total) : "—";
   const prev = netWorthAt(monthEnd(shiftMonth(currentMonth, -1)));
-  if (nw && prev) { const d = nw.total - prev.total; $("nwDelta").innerHTML = `<span class="${d < 0 ? "neg" : d > 0 ? "pos" : ""}">${fmtSigned(d)}</span> da fine ${monthLabel(shiftMonth(currentMonth, -1)).toLowerCase()}`; }
+  const base = lastBaseline(at), prevEnd = monthEnd(shiftMonth(currentMonth, -1));
+  if (nw && base && base.date > prevEnd) $("nwDelta").textContent = `Nuovo punto di partenza il ${fmtDate(base.date)}: variazione non confrontabile con il mese prima.`;
+  else if (nw && prev) { const d = nw.total - prev.total; $("nwDelta").innerHTML = `<span class="${d < 0 ? "neg" : d > 0 ? "pos" : ""}">${fmtSigned(d)}</span> da fine ${monthLabel(shiftMonth(currentMonth, -1)).toLowerCase()}`; }
   else $("nwDelta").textContent = "";
   const liq = nw && nw.l ? nw.l.value : 0, inv = nw && nw.i ? nw.i.value : 0, tot = Math.max(1, Math.abs(liq) + Math.abs(inv));
   $("nwSplit").innerHTML = nw && (liq > 0 || inv > 0) ? [["invest", inv], ["liquid", liq]].map(([k, v]) => `<span style="width:${Math.max(0, v) / tot * 100}%;background:${kindColor(k)}"></span>`).join("") : "";
@@ -2021,13 +2049,16 @@ function renderNetWorth() {
   if (lastLiq) $("nwDueText").textContent = `Ultimo controllo dei saldi il ${fmtDate(lastLiq.date)}, ${age} giorni fa: confrontali con banca e portafoglio (2 minuti).`;
   // storico dei controlli e scarti
   $("nwHist").innerHTML = state.checkpoints.slice().sort(byDateAsc).reverse().map((k) => {
-    const gap = k.liquid && typeof k.expectedLiquid === "number" ? sumVals(k.liquid) - k.expectedLiquid : null;
+    const cg = cpGap(k), gap = cg ? cg.gap : null;
     return `<div class="nw-h" data-k="${k.id}"><div><strong>${fmtDate(k.date)}</strong><br><span class="small muted">${k.liquid ? "liquidità reale " + fmtEur(sumVals(k.liquid)) : ""}${k.liquid && k.invest ? " · " : ""}${k.invest ? "investimenti " + fmtEur(sumVals(k.invest)) : ""}</span>
-      ${gap != null ? `<br><span class="small">Previsto ${fmtEur(k.expectedLiquid)} · scarto <strong class="${gap < 0 ? "neg" : gap > 0 ? "pos" : ""}">${fmtSigned(gap)}</strong>${gap < 0 ? " (spese non registrate)" : gap > 0 ? " (entrate non registrate)" : " ✓"}</span>` : ""}</div>
+      ${gap != null ? `<br><span class="small">Previsto ${fmtEur(k.expectedLiquid)} · scarto <strong class="${gap < 0 ? "neg" : gap > 0 ? "pos" : ""}">${fmtSigned(gap)}</strong>${gap < 0 ? " (spese non registrate)" : gap > 0 ? " (entrate non registrate)" : " ✓"}${cg.fresh ? ` · conti nuovi ${fmtEur(cg.fresh)} esclusi` : ""}</span>` : ""}
+      ${k.baseline ? `<br><span class="small">Punto di partenza: saldi inseriti per la prima volta, nessuno scarto.</span>` : ""}
+      ${k.liquid ? `<br><button class="link" data-kbase="${k.id}">${k.baseline ? "Non è un punto di partenza" : "Segna come punto di partenza"}</button>` : ""}</div>
       <button class="link danger" data-kdel="${k.id}">Elimina</button></div>`;
   }).join("");
   // andamento: fine di ogni mese dal primo controllo
-  const first = monthOf(state.checkpoints.slice().sort(byDateAsc)[0].date), months = [];
+  const b0 = lastBaseline(nwDateFor(currentMonth)), first0 = monthOf(state.checkpoints.slice().sort(byDateAsc)[0].date);
+  const first = b0 && monthOf(b0.date) > first0 ? monthOf(b0.date) : first0, months = [];   // il grafico parte dall'ultimo punto di partenza
   for (let ym = first; ym <= currentMonth && months.length < 24; ym = shiftMonth(ym, 1)) months.push(ym);
   const pts = months.slice(-12).map((ym) => ({ ym, v: netWorthAt(nwDateFor(ym)) })).filter((x) => x.v);
   const showChart = pts.length >= 2 && chartLibState === "ready";
@@ -2124,18 +2155,19 @@ function monthStory(ym) {
   const sum = computeSummary(ym);
   if (!sum.list.length) return null;
   const t = sum.total, isNow = ym === monthOf(todayISO()), esc = escapeHtml, slides = [];
-  slides.push({ g: ["#2a78d6", "#4a3aa7"], html: `<div class="kicker">${monthLabel(ym)}${isNow ? " · fino a oggi" : ""}</div>
+  const TONE = { neu: ["#3a3833", "#24231f"], pos: ["#17605E", "#24231f"], neg: ["#7a2a24", "#24231f"] };
+  slides.push({ g: TONE[t.budget > 0 ? (t.left >= 0 ? "pos" : "neg") : "neu"], html: `<div class="kicker">${monthLabel(ym)}${isNow ? " · fino a oggi" : ""}</div>
     <div class="huge">${fmtEur(t.spent)}</div><p>spesi in ${sum.list.length} ${sum.list.length === 1 ? "movimento" : "movimenti"}.</p>`
-    + (t.budget > 0 ? `<div><span class="pillbox">${t.left >= 0 ? "✅ Sotto budget di " + fmtEur(t.left) : "⚠️ Oltre il budget di " + fmtEur(-t.left)}</span></div><p>Budget del mese ${fmtEur(t.budget)}, usato al ${fmtPct(t.pct)}.</p>` : `<p>Per questo mese non c'era un budget.</p>`) });
+    + (t.budget > 0 ? `<div><span class="pillbox">${t.left >= 0 ? "Sotto il budget di " + fmtEur(t.left) : "Oltre il budget di " + fmtEur(-t.left)}</span></div><p>Budget del mese ${fmtEur(t.budget)}, usato al ${fmtPct(t.pct)}.</p>` : `<p>Per questo mese non c'era un budget.</p>`) });
   const top = sum.rows.filter((r) => r.spent > 0).sort((a, b) => b.spent - a.spent)[0];
-  if (top) slides.push({ g: ["#eb6834", "#e34948"], html: `<div class="kicker">Dove sono andati i soldi</div><div class="emoji">${esc(top.cat.icon || "")}</div>
+  if (top) slides.push({ g: TONE.neu, html: `<div class="kicker">Dove sono andati i soldi</div><div class="emoji">${esc(top.cat.icon || "")}</div>
     <div class="huge">${esc(top.cat.name)}</div><p>${fmtEur(top.spent)}: il ${fmtPct(top.spent / t.spent * 100)} di tutto quello che hai speso.</p>`
     + (top.budget > 0 ? `<div><span class="pillbox">${top.left >= 0 ? "Dentro il budget di " + fmtEur(top.budget) : "Oltre il budget di " + fmtEur(-top.left)}</span></div>` : "") });
   const byDay = {};
   sum.list.forEach((e) => { (byDay[e.date] = byDay[e.date] || []).push(e); });
   const [dIso, dList] = Object.entries(byDay).sort((a, b) => b[1].reduce((s, e) => s + e.amount, 0) - a[1].reduce((s, e) => s + e.amount, 0))[0];
   const [y, m, d] = dIso.split("-").map(Number), dLabel = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" }).format(new Date(y, m - 1, d));
-  slides.push({ g: ["#e87ba4", "#4a3aa7"], html: `<div class="kicker">Il giorno più caro</div><div class="huge" style="font-size:clamp(1.9rem,8vw,2.8rem)">${dLabel.charAt(0).toUpperCase() + dLabel.slice(1)}</div>
+  slides.push({ g: TONE.neu, html: `<div class="kicker">Il giorno più caro</div><div class="huge" style="font-size:clamp(1.9rem,8vw,2.8rem)">${dLabel.charAt(0).toUpperCase() + dLabel.slice(1)}</div>
     <p>${fmtEur(dList.reduce((s, e) => s + e.amount, 0))} in ${dList.length} ${dList.length === 1 ? "spesa" : "spese"}.</p>
     <ul>${dList.slice().sort((a, b) => b.amount - a.amount).slice(0, 3).map((e) => `<li><span>${esc(catById(e.catId)?.icon || "")} ${esc(cleanDesc(e.desc) || catById(e.catId)?.name || "")}</span><span>${fmtEur(e.amount)}</span></li>`).join("")}</ul>` });
   const pYm = shiftMonth(ym, -1), prev = computeSummary(pYm);
@@ -2143,18 +2175,18 @@ function monthStory(ym) {
     const diff = t.spent - prev.totalSpent;
     const deltas = sum.rows.map((r, i) => ({ c: r.cat, d: r.spent - prev.rows[i].spent })).filter((x) => x.d !== 0).sort((a, b) => a.d - b.d);
     const down = deltas[0] && deltas[0].d < 0 ? deltas[0] : null, up = deltas.length && deltas[deltas.length - 1].d > 0 ? deltas[deltas.length - 1] : null;
-    slides.push({ g: ["#1baf7a", "#2a78d6"], html: `<div class="kicker">Rispetto a ${monthLabel(pYm).toLowerCase()}</div>
+    slides.push({ g: TONE[diff <= 0 ? "pos" : "neg"], html: `<div class="kicker">Rispetto a ${monthLabel(pYm).toLowerCase()}</div>
       <div class="huge">${diff <= 0 ? "−" : "+"}${fmtEur(Math.abs(diff))}</div><p>${diff <= 0 ? "Hai speso meno" : "Hai speso di più"} del mese prima (${fmtEur(prev.totalSpent)}).</p>`
-      + (down ? `<p>📉 Scesa di più: ${esc(down.c.icon || "")} ${esc(down.c.name)}, −${fmtEur(-down.d)}</p>` : "")
-      + (up ? `<p>📈 Salita di più: ${esc(up.c.icon || "")} ${esc(up.c.name)}, +${fmtEur(up.d)}</p>` : "") });
+      + (down ? `<p>Scesa di più: ${esc(down.c.icon || "")} ${esc(down.c.name)}, −${fmtEur(-down.d)}</p>` : "")
+      + (up ? `<p>Salita di più: ${esc(up.c.icon || "")} ${esc(up.c.name)}, +${fmtEur(up.d)}</p>` : "") });
   }
   const bal = sum.income - t.spent, own = sum.ownIncome - t.spent, days = computeDays(ym, sum);
-  slides.push({ g: ["#008300", "#1baf7a"], html: `<div class="kicker">Risparmio del mese</div><div class="huge">${fmtSigned(bal)}</div>
+  slides.push({ g: TONE[bal >= 0 ? "pos" : "neg"], html: `<div class="kicker">Risparmio del mese</div><div class="huge">${fmtSigned(bal)}</div>
     <p>Entrate ${fmtEur(sum.income)} − spese ${fmtEur(t.spent)}${sum.income > 0 ? `, tasso di risparmio ${fmtPct(bal / sum.income * 100)}` : ""}.</p>`
     + (sum.familyIncome > 0 ? `<p>Senza gli aiuti di famiglia: <strong>${fmtSigned(own)}</strong>.</p>` : "")
-    + (days && days.past ? `<div><span class="pillbox">🟢 ${days.green} giorni su ${days.past} in budget · serie migliore ${days.best}</span></div>` : "")
+    + (days && days.past ? `<div><span class="pillbox">${days.green} giorni su ${days.past} nel budget</span></div>` : "")
     + (sum.invested ? `<p>📈 Investito nel mese: ${fmtSigned(sum.invested)}.</p>` : "")
-    + state.checkpoints.filter((k) => monthOf(k.date) === ym && k.liquid && typeof k.expectedLiquid === "number").map((k) => { const g = sumVals(k.liquid) - k.expectedLiquid; return `<p>🔎 Controllo del ${fmtDate(k.date)}: scarto ${fmtSigned(g)}${g < 0 ? " di spese non registrate" : ""}.</p>`; }).join("") });
+    + state.checkpoints.filter((k) => monthOf(k.date) === ym && cpGap(k)).map((k) => { const g = cpGap(k).gap; return `<p>Controllo del ${fmtDate(k.date)}: scarto ${fmtSigned(g)}${g < 0 ? " di spese non registrate" : g > 0 ? " di entrate non registrate" : ""}.</p>`; }).join("") });
   return slides;
 }
 function openStory(ym) {
@@ -2239,6 +2271,7 @@ function renderAnalysis() {
 
 /* --- Scheda Impostazioni --- */
 function renderSettings(sum) {
+  $("loadDemo").hidden = hasUserData(state);   // mai dati di prova mescolati a quelli reali
   const b = sum.budget, active = document.activeElement;
   $("inheritBadge").textContent = b.inheritedFrom ? `ereditato da ${monthLabel(b.inheritedFrom).toLowerCase()}` : (state.budgets[currentMonth] ? "impostato per questo mese" : "non ancora impostato");
   if (active !== $("bTotal")) $("bTotal").value = b.total > 0 ? centsToInput(b.total) : "";
@@ -2290,12 +2323,14 @@ function renderPie(sum) {
   $("chartFail").hidden = chartLibState !== "failed";
   $("chartBox").hidden = !hasData || chartLibState !== "ready";
   if (chartLibState !== "ready" || !hasData) return;
-  const total = slices.reduce((s, x) => s + x.value, 0), { ink, surface } = chartColors();
+  const total = Math.max(1, sum.totalSpent), { ink, surface } = chartColors();   // stesso totale del riepilogo e delle storie
+  const negative = sum.rows.filter((r) => r.spent < 0);
+  $("pieNote").textContent = negative.length ? `${negative.map((r) => r.cat.name + " " + fmtEur(r.spent)).join(", ")}: rimborsi superiori alla spesa del mese, non disegnati nel grafico.` : "";
   const labelFor = (i) => `${slices[i].icon ? slices[i].icon + " " : ""}${slices[i].label} — ${fmtEur(slices[i].value)} (${fmtPct(slices[i].value / total * 100)})`;
   const data = { labels: slices.map((s) => s.label), datasets: [{ data: slices.map((s) => s.value / 100), backgroundColor: slices.map((s) => s.color), borderColor: surface, borderWidth: 2, hoverOffset: 6 }] };
   const options = { responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, cutout: "64%",
     plugins: {
-      centerText: { top: "Speso", value: fmtEur(total), color: ink },
+      centerText: { top: "Speso", value: fmtEur(sum.totalSpent), color: ink },
       legend: { position: window.innerWidth < 1000 ? "bottom" : "right",
         labels: { color: ink, boxWidth: 12, boxHeight: 12, usePointStyle: true, pointStyle: "circle", padding: 10, font: { size: 13, family: "Public Sans, system-ui, sans-serif" },
           generateLabels: (ch) => ch.data.labels.map((_, i) => ({ text: labelFor(i), fillStyle: slices[i].color, strokeStyle: slices[i].color, fontColor: ink, hidden: !ch.getDataVisibility(i), index: i, pointStyle: "circle" })) },
@@ -2349,7 +2384,8 @@ function openSheet(kind = "exp", item = null) {
   sheet.refId = item ? (item.kind === "exp" || item.kind === "ref" ? item.catId : item.kind === "inv" ? item.dir : item.sourceId) : null;
   sheet.manual = !!item; sheet.auto = false;
   $("fAmount").value = item ? centsToInput(item.amount) : "";
-  $("fDate").value = item ? item.date : (monthOf(todayISO()) === currentMonth ? todayISO() : `${currentMonth}-01`);
+  $("fDate").value = item ? item.date : todayISO();   // v5.2: sempre oggi, anche se si sta guardando un altro mese
+  updateDateHint(); updateCalc();
   $("fDesc").value = item ? item.desc || "" : "";
   ["eAmount", "eCat", "eDate"].forEach((id) => $(id).textContent = "");
   ["fAmount", "fDate"].forEach((id) => $(id).removeAttribute("aria-invalid"));
@@ -2436,6 +2472,15 @@ function renderQuick() {
   $("quickChips").innerHTML = list.map((q, i) => `<button type="button" data-q="${i}">${escapeHtml(catById(q.catId).icon || "")} ${escapeHtml(q.desc)} · ${fmtEur(q.amount)}</button>`).join("");
   $("quickChips")._list = list;
 }
+function updateCalc() {
+  const v = $("fAmount").value, p = /\d\s*[+\-−]\s*\d/.test(v) ? parseAmount(v) : null;
+  $("amountCalc").textContent = p != null ? "= " + fmtEur(p) : "";
+}
+function updateDateHint() {
+  const d = $("fDate").value, other = isValidISODate(d) && monthOf(d) !== monthOf(todayISO());
+  $("dateHint").hidden = !other;
+  if (other) $("dateHint").textContent = `Attenzione: la data è in ${monthLabel(monthOf(d)).toLowerCase()}, non nel mese in corso.`;
+}
 function saveMove(ev) {
   ev.preventDefault();
   const date = $("fDate").value, amount = parseAmount($("fAmount").value), refId = sheet.refId, isExp = sheet.kind === "exp", isInv = sheet.kind === "inv", isCat = isExp || sheet.kind === "ref";
@@ -2449,6 +2494,16 @@ function saveMove(ev) {
   if (errs.eDate) $("fDate").setAttribute("aria-invalid", "true"); else $("fDate").removeAttribute("aria-invalid");
   if (errs.eAmount) $("fAmount").setAttribute("aria-invalid", "true"); else $("fAmount").removeAttribute("aria-invalid");
   if (Object.keys(errs).length) return;
+  if (sheet.kind === "ref" && !ev.refChecked) {
+    const ry = monthOf(date), others = (x) => x.catId === refId && monthOf(x.date) === ry && x.id !== sheet.editing;
+    const room = state.expenses.filter(others).reduce((a, x) => a + x.amount, 0) - state.refunds.filter(others).reduce((a, x) => a + x.amount, 0);
+    if (amount > room) {
+      const c = catById(refId);
+      askConfirm(`Il rimborso (${fmtEur(amount)}) supera quanto speso in ${c ? c.name : "questa categoria"} in ${monthLabel(ry).toLowerCase()} (${fmtEur(Math.max(0, room))}). Un rimborso può solo restituire una spesa: la parte in più va registrata come entrata (per esempio un aiuto della famiglia). Salvare comunque?`, "Salva comunque")
+        .then((ok) => { if (ok) saveMove({ preventDefault() {}, refChecked: true }); });
+      return;
+    }
+  }
   const ym = monthOf(date), months = [ym];
   const before = computeAlerts(computeSummary(ym));
   const v = { date, amount, desc: $("fDesc").value.trim() };
@@ -2972,6 +3027,9 @@ function bindEvents() {
     renderSheet(); $("submitBtn").focus();
   });
   $("moveForm").addEventListener("submit", saveMove);
+  $("fAmount").addEventListener("input", updateCalc);
+  $("fDate").addEventListener("input", updateDateHint); $("fDate").addEventListener("change", updateDateHint);
+  document.addEventListener("click", (ev) => { if (ev.target.closest('.calc-key[data-for="fAmount"]')) setTimeout(updateCalc, 0); });
   // Tasti + e −. Su iPhone l'azione parte al tocco (touchstart): bloccarlo tiene aperta la
   // tastiera ma sopprime il "click", quindi il click resta solo per mouse e trackpad.
   document.querySelectorAll(".calc-key").forEach((b) => {
@@ -3014,7 +3072,13 @@ function bindEvents() {
   $("nwStartBtn").addEventListener("click", openNw);
   $("nwDueBtn").addEventListener("click", openNw);
   $("nwDate").addEventListener("input", updateNwCheck);
-  $("nwHist").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-kdel]"); if (b) deleteCheckpoint(b.dataset.kdel); });
+  $("nwHist").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-kdel]"); if (b) { deleteCheckpoint(b.dataset.kdel); return; }
+    const t = ev.target.closest("button[data-kbase]"); if (!t) return;
+    const k = state.checkpoints.find((x) => x.id === t.dataset.kbase); if (!k) return;
+    if (k.baseline) delete k.baseline; else k.baseline = true;
+    persist(); render();
+  });
   $("nwClose").addEventListener("click", () => { $("nwSheet").hidden = true; });
   $("nwForm").addEventListener("submit", saveNw);
   $("nwAdd").addEventListener("click", () => { nwDraft.push({ id: "a" + uid(), name: "", kind: "liquid", icon: "💰", value: "", last: null }); renderNwRows(); const r = $("nwRows").querySelector(`[data-i="${nwDraft.length - 1}"] [data-f="name"]`); if (r) r.focus(); });
